@@ -1,0 +1,21 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "python.defaultInterpreterPath": "${workspaceFolder}/apps/api/.venv/bin/python",
+  "mypy-type-checker.configFilePath": "${workspaceFolder}/apps/api/pyproject.toml",
+  "ruff.configuration": "${workspaceFolder}/apps/api/pyproject.toml",
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "tailwindCSS.experimental.classRegex": [
+    ["cn\\(([^)]*)\\)", "\"([^\"]*)\""]
+  ],
+  "eslint.workingDirectories": [{ "directory": "apps/web", "changeProcessCWD": true }],
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+
+# Node
+node_modules/
+.turbo/
+*.tsbuildinfo
+
+# Build outputs
+apps/web/dist/
+apps/api/dist/
+
+# Environment — NEVER commit .env, always commit .env.example
+.env
+.env.local
+.env.*.local
+
+# IDE / OS
+.vscode/*.log
+.idea/
+*.DS_Store
+Thumbs.db
+
+# TanStack Router (auto-generated)
+apps/web/src/routeTree.gen.ts
+
+# uv — .python-version is auto-managed by uv; uv.lock IS committed for reproducibility
+apps/api/.python-version
