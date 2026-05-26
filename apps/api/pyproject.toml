@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
-    "pydantic>=2.10",
+    "pydantic[email]>=2.10",
     "pydantic-settings>=2.7",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.30",
@@ -15,6 +15,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7",
     "httpx>=0.28",
     "structlog>=24.4",
+    "bcrypt<4.0",
 ]
 
 [dependency-groups]
@@ -39,6 +40,7 @@ packages = ["src/app"]
 [tool.ruff]
 target-version = "py312"
 line-length = 88
+exclude = ["alembic/versions/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "W"]
@@ -63,6 +65,8 @@ ignore_missing_imports = true
 # pytest
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 pythonpath = ["src"]
 

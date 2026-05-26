@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 3000,
     proxy: {
       // Forward /api/* to FastAPI — no rewrite needed since FastAPI routes
       // already include the /api/v1 prefix

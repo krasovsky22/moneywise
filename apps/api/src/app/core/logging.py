@@ -13,7 +13,6 @@ def configure_logging(environment: str = "development") -> None:
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.add_logger_name,
     ]
 
     if environment == "production":

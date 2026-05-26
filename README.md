@@ -8,7 +8,7 @@ Personal finance management app — monorepo scaffold.
 moneywise/
 ├── apps/
 │   ├── api/          # Python FastAPI backend (:8000)
-│   └── web/          # React 19 + Vite + TypeScript frontend (:5173)
+│   └── web/          # React 19 + Vite + TypeScript frontend (:3000)
 ├── packages/
 │   └── shared-types/ # Shared TypeScript interfaces
 ├── docker-compose.yml
@@ -57,7 +57,7 @@ pnpm dev
 ```
 
 Visit:
-- **Frontend:** http://localhost:5173 — shows API health status
+- **Frontend:** http://localhost:3000 — shows API health status
 - **API docs:** http://localhost:8000/docs — FastAPI OpenAPI UI
 - **API health:** http://localhost:8000/api/v1/health
 

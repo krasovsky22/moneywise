@@ -11,7 +11,7 @@ This monorepo is being scaffolded from `INITIAL_PROMPT.md`. No business logic ex
 ### Root (requires pnpm workspaces + Turborepo)
 ```bash
 pnpm install          # Install all JS/TS dependencies
-pnpm dev              # Start API (:8000) + web (:5173) concurrently
+pnpm dev              # Start API (:8000) + web (:3000) concurrently
 pnpm build            # Production build for both apps
 pnpm test             # Run all tests (Vitest + pytest via Turborepo)
 pnpm lint             # Lint entire workspace

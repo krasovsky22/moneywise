@@ -52,7 +52,7 @@ stores/               — Zustand stores
 
 ## Common commands
 ```bash
-pnpm --filter web dev          # dev server (:5173)
+pnpm --filter web dev          # dev server (:3000)
 pnpm --filter web test         # Vitest unit tests
 pnpm --filter web test:e2e     # Playwright E2E
 pnpm --filter web typecheck    # tsc --noEmit

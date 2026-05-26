@@ -14,7 +14,9 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@moneywise/shared-types": "workspace:*",
+    "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.3",
     "@tanstack/react-query": "^5.74.4",
     "@tanstack/react-router": "^1.120.13",
@@ -22,9 +24,11 @@
     "clsx": "^2.1.1",
     "ky": "^1.7.5",
     "lucide-react": "^0.511.0",
+    "next-themes": "^0.4.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.56.3",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.0",
     "zod": "^3.24.4",
     "zustand": "^5.0.5"
