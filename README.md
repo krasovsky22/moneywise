@@ -97,6 +97,65 @@ Visit:
 
 **Infra:** PostgreSQL 16 · Redis 7 · Docker Compose · GitHub Actions · Turborepo · lefthook
 
+## Claude Code Agents
+
+This project ships three Claude Code sub-agents in `.claude/agents/`. Invoke them by name when delegating work inside Claude Code.
+
+### `product-manager`
+**Role:** Feature coordinator — no code, only analysis and delegation.
+
+Workflow for any feature request:
+1. Audits the codebase to understand current state
+2. Defines acceptance criteria and identifies gaps
+3. Splits work into backend and frontend tracks
+4. Delegates to `api-backend` and/or `web-frontend` (in parallel when independent, sequentially when frontend depends on a backend contract)
+5. Verifies completion against acceptance criteria and re-delegates if anything is missing
+
+May write planning docs under `.planning/`. Never touches `apps/`.
+
+---
+
+### `api-backend`
+**Role:** Python FastAPI professional — owns everything in `apps/api/`.
+
+Responsibilities:
+- FastAPI routes, services, schemas, ORM models
+- Alembic migrations
+- Async SQLAlchemy sessions and dependency injection
+- pytest tests, mypy strict, ruff lint/format
+
+Key constraints: all DB/route code is async; route handlers are thin (delegate to a service); never access `os.environ` directly — use Pydantic Settings.
+
+---
+
+### `web-frontend`
+**Role:** React UI developer — owns everything in `apps/web/`.
+
+Responsibilities:
+- TanStack Router file-based routes and layouts
+- Feature components and `use<Feature>.ts` hooks (TanStack Query)
+- Zustand stores for client state
+- shadcn/ui + Tailwind for all UI — no raw HTML elements when a primitive exists
+- Vitest unit tests and Playwright E2E tests
+
+Key constraints: TypeScript strict (no `any` without comment); all API calls through `src/lib/api-client.ts`; env vars only through the typed wrapper; accessible markup with `aria-label` on ambiguous controls.
+
+---
+
+### Example usage
+
+```
+# Describe a feature to the product manager and let it coordinate:
+"Add a monthly budget tracker — users can set a budget per category and see spending vs budget."
+
+# The product-manager agent will:
+# 1. Audit existing models and routes
+# 2. Define backend tasks (Budget model, migration, CRUD endpoints)
+# 3. Define frontend tasks (budget route, BudgetCard component, useBudget hook)
+# 4. Delegate to api-backend (backend), then web-frontend (frontend)
+# 5. Confirm both tracks meet acceptance criteria
+```
+
 ## Database (Cloud)
 
 For cloud deployment, use **[Neon](https://neon.tech)** (free tier: 10 GB, no idle pausing, database branching). Set `DATABASE_URL` in your deployment environment to the Neon connection string.
