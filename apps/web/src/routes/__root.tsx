@@ -1,4 +1,4 @@
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import { createRootRouteWithContext, Outlet, useRouterState } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -33,9 +33,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
+  const isSecure = useRouterState({
+    select: (s) => s.location.pathname.startsWith("/secure"),
+  });
+
   return (
     <>
-      <Header />
+      {!isSecure && <Header />}
       <Outlet />
       <Toaster />
     </>
