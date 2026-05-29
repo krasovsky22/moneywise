@@ -20,7 +20,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { register, getMe } from "@/features/auth/authApi";
 import { useAuthStore } from "@/stores/auth";
 
+const searchSchema = z.object({
+  token: z.string().optional(),
+});
+
 export const Route = createFileRoute("/signup")({
+  validateSearch: searchSchema,
   beforeLoad: () => {
     if (useAuthStore.getState().accessToken) {
       throw redirect({ to: "/secure/dashboard" });
@@ -44,6 +49,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 function SignupPage() {
   const router = useRouter();
+  const { token } = Route.useSearch();
   const { setAuth } = useAuthStore();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -58,9 +64,16 @@ function SignupPage() {
       const user = await getMe();
       return { token: tokenRes.access_token, user };
     },
-    onSuccess: async ({ token, user }) => {
-      setAuth(token, user);
-      await router.navigate({ to: "/secure/dashboard" });
+    onSuccess: async ({ token: accessToken, user }) => {
+      setAuth(accessToken, user);
+      if (token) {
+        await router.navigate({
+          to: "/secure/join-household",
+          search: { token },
+        });
+      } else {
+        await router.navigate({ to: "/secure/dashboard" });
+      }
     },
     onError: (err: unknown) => {
       const status = getHttpStatus(err);
@@ -159,6 +172,7 @@ function SignupPage() {
             Already have an account?{" "}
             <Link
               to="/login"
+              search={token ? { token } : undefined}
               className="text-primary underline-offset-4 hover:underline"
             >
               Log in

@@ -27,6 +27,7 @@ import { useAuthStore } from "@/stores/auth";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
+  token: z.string().optional(),
 });
 
 export const Route = createFileRoute("/login")({
@@ -49,7 +50,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 function LoginPage() {
   const router = useRouter();
-  const { redirect: redirectTo } = Route.useSearch();
+  const { redirect: redirectTo, token } = Route.useSearch();
   const { setAuth } = useAuthStore();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -64,11 +65,18 @@ function LoginPage() {
       const user = await getMe();
       return { token: tokenRes.access_token, user };
     },
-    onSuccess: async ({ token, user }) => {
-      setAuth(token, user);
-      await router.navigate({
-        to: redirectTo ?? "/secure/dashboard",
-      });
+    onSuccess: async ({ token: accessToken, user }) => {
+      setAuth(accessToken, user);
+      if (token) {
+        await router.navigate({
+          to: "/secure/join-household",
+          search: { token },
+        });
+      } else {
+        await router.navigate({
+          to: redirectTo ?? "/secure/dashboard",
+        });
+      }
     },
     onError: (err: unknown) => {
       const status = getHttpStatus(err);
@@ -149,6 +157,7 @@ function LoginPage() {
             Don&apos;t have an account?{" "}
             <Link
               to="/signup"
+              search={token ? { token } : undefined}
               className="text-primary underline-offset-4 hover:underline"
             >
               Sign up

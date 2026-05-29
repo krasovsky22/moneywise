@@ -16,6 +16,7 @@ from app.core.database import Base
 # Import all model modules so Alembic autogenerate can detect table changes.
 # Add new model imports here whenever a new module is created.
 from app.modules.auth import models as auth_models  # noqa: F401
+from app.modules.household import models as household_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 
 config = context.config

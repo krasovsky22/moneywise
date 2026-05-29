@@ -19,6 +19,7 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    print(token)
     subject = decode_access_token(token)
     try:
         user_id = uuid.UUID(subject)

@@ -13,7 +13,7 @@ export interface User {
 
 export async function login(
   email: string,
-  password: string
+  password: string,
 ): Promise<TokenResponse> {
   return apiClient
     .post("api/v1/auth/login", { json: { email, password } })
@@ -22,7 +22,7 @@ export async function login(
 
 export async function register(
   email: string,
-  password: string
+  password: string,
 ): Promise<TokenResponse> {
   return apiClient
     .post("api/v1/auth/register", { json: { email, password } })
@@ -34,9 +34,7 @@ export async function logout(): Promise<void> {
 }
 
 export async function refresh(): Promise<TokenResponse> {
-  return apiClient
-    .post("api/v1/auth/refresh")
-    .json<TokenResponse>();
+  return apiClient.post("api/v1/auth/refresh").json<TokenResponse>();
 }
 
 export async function getMe(): Promise<User> {
@@ -45,7 +43,7 @@ export async function getMe(): Promise<User> {
 
 export async function changePassword(
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<void> {
   await apiClient.post("api/v1/auth/change-password", {
     json: { current_password: currentPassword, new_password: newPassword },

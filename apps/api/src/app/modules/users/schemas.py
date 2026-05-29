@@ -14,6 +14,7 @@ class UserCreate(BaseModel):
 class UserRead(BaseModel):
     id: uuid.UUID
     email: str
+    display_name: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

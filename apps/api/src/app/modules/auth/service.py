@@ -21,11 +21,22 @@ from app.modules.users.service import create_user, get_user_by_email
 
 
 async def register_user(db: AsyncSession, email: str, password: str) -> User:
+    from app.modules.household.service import (
+        add_member,
+        create_household,
+    )
+
     existing = await get_user_by_email(db, email)
     if existing is not None:
         raise ConflictError("An account with this email already exists")
     hashed = get_password_hash(password)
-    return await create_user(db, email, hashed)
+    user = await create_user(db, email, hashed)
+
+    email_prefix = email.split("@")[0].replace(".", " ").title()
+    household = await create_household(db, f"{email_prefix}'s Household")
+    await add_member(db, household.id, user.id)
+
+    return user
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:

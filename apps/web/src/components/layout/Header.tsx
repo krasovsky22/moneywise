@@ -1,13 +1,23 @@
 import { Link, useRouter } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/features/auth/authApi";
+import { getHousehold } from "@/features/household/householdApi";
 import { useAuthStore } from "@/stores/auth";
 
 export function Header() {
   const { accessToken, user, clearAuth } = useAuthStore();
   const router = useRouter();
+
+  const { data: household } = useQuery({
+    queryKey: ["household"],
+    queryFn: getHousehold,
+    enabled: !!accessToken,
+    // Silently suppress errors — header should never crash
+    retry: false,
+  });
 
   async function handleLogout() {
     try {
@@ -38,6 +48,15 @@ export function Header() {
         <nav className="flex items-center gap-4">
           {accessToken ? (
             <>
+              {household && (
+                <span className="text-sm font-medium">{household.name}</span>
+              )}
+              <Link
+                to="/secure/settings"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Settings
+              </Link>
               <span className="text-sm text-muted-foreground">{user?.email}</span>
               <Button
                 variant="outline"

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # CORS — Pydantic Settings v2 parses JSON strings for list fields
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # App metadata
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
