@@ -16,7 +16,7 @@ This epic owns the **lifecycle and UX** of statement processing. The AI parsing/
 - Drag-and-drop or file-picker upload, one file at a time (multi-file in V1).
 - Accept PDF (primary) and CSV (secondary). Reject other formats with clear error copy.
 - File size cap (e.g., 25 MB) with clear message.
-- Associate upload with one **card** (selected from a picker).
+- Associate upload with one **account** (card or bank account, selected from a unified picker).
 - Optional: user labels the statement period (auto-detected after parsing, but user can override).
 - Server-side: store the file (encrypted at rest), enqueue parsing job, return immediately.
 - A **Statement** record has a clear status: `queued → parsing → categorizing → needs_review → ready` (or `failed` at any step).
@@ -73,7 +73,7 @@ This epic owns the **lifecycle and UX** of statement processing. The AI parsing/
 
 New entities:
 
-- `Statement` — id, household_id, card_id, uploaded_by_user_id, file_hash, file_storage_key, file_mime, file_size_bytes, file_original_name, period_start (nullable until parsed), period_end (nullable), status (enum), failure_reason (nullable enum), uploaded_at, processed_at, ai_cost_cents (nullable, for telemetry).
+- `Statement` — id, household_id, card_id (nullable FK), bank_account_id (nullable FK), uploaded_by_user_id, file_hash, file_storage_key, file_mime, file_size_bytes, file_original_name, period_start (nullable until parsed), period_end (nullable), status (enum), failure_reason (nullable enum), uploaded_at, processed_at, ai_cost_cents (nullable, for telemetry). Exactly one of card_id / bank_account_id must be non-null — enforced at the application layer.
 - `Transaction` (created here, owned conceptually by Epic 06) gets `source_statement_id` (nullable — null for manual).
 
 ## API surface (high-level)
@@ -103,6 +103,6 @@ New entities:
 
 ## Dependencies
 
-- Blocked by: Cards (a statement needs a card).
+- Blocked by: Cards (Epic 02) and Bank Accounts (Epic 02b) — a statement must belong to one or the other.
 - Blocks: AI Parsing (Epic 04), Transactions (Epic 06).
 - Hard interaction with: Dashboard (Epic 09) — must surface pending statements.

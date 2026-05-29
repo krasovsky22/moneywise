@@ -20,6 +20,7 @@ A single, fast, trustworthy place to view, search, filter, and correct every tra
   - Amount range.
   - Confirmation status (confirmed / needs-review).
   - Source (statement / manual).
+  - Transaction type (expense / income / transfer / refund).
 - Full-text search on merchant string and notes.
 - Per-row inline edit of category (one-click); modal edit for amount, date, merchant, notes.
 - Manual transaction entry (for cash purchases or to correct missing rows).
@@ -83,6 +84,7 @@ A single, fast, trustworthy place to view, search, filter, and correct every tra
 
 Extends `Transaction` (introduced in Epic 04):
 
+- `transaction_type` (enum: expense | income | transfer | refund, default expense) — set by the AI pipeline (Epic 04); user-overridable via the same inline edit flow as category. `transfer` rows are excluded from all spending totals, cashflow formula inputs, and category reports (see Epic 02b).
 - `is_split` (bool, default false), `parent_transaction_id` (nullable self-FK), `is_deleted` (bool), `deleted_at`.
 - `TransactionAudit` — id, transaction_id, changed_by_user_id, changed_at, change_kind (enum: created, edited, categorized, split, deleted, undeleted), before (jsonb), after (jsonb).
 
@@ -114,5 +116,5 @@ Extends `Transaction` (introduced in Epic 04):
 
 ## Dependencies
 
-- Blocked by: AI Parsing (Epic 04), Categories (Epic 05), Cards (Epic 02).
+- Blocked by: AI Parsing (Epic 04), Categories (Epic 05), Cards (Epic 02), Bank Accounts (Epic 02b).
 - Blocks: Cashflow accuracy (Epic 08), Dashboard rollups (Epic 09).
