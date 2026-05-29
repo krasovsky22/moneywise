@@ -75,8 +75,12 @@ async def test_create_card_sets_only_one_default(db_client: AsyncClient) -> None
 
     card2 = await db_client.post(
         _CARDS_URL,
-        json={**_VALID_CARD, "nickname": "Amex Gold", "last4": "5678",
-              "is_default": True},
+        json={
+            **_VALID_CARD,
+            "nickname": "Amex Gold",
+            "last4": "5678",
+            "is_default": True,
+        },
         headers=headers,
     )
     assert card2.json()["is_default"] is True
