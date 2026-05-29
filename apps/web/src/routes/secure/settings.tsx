@@ -189,6 +189,7 @@ function SettingsPage() {
 
       {/* Household Card */}
       <HouseholdCard currentUserId={user?.id ?? null} />
+
     </main>
   );
 }

@@ -28,7 +28,7 @@ type NavItem = NavLeaf | NavGroup;
 
 const MENU_ITEMS: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", to: "/secure/dashboard" },
-  { icon: Wallet, label: "My Wallet" },
+  { icon: Wallet, label: "My Wallet", to: "/secure/wallet" },
   {
     icon: ArrowLeftRight,
     label: "Activity",
