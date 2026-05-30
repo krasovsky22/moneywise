@@ -34,7 +34,8 @@ common/        — shared exceptions, base models, utilities
 - Route handlers are thin — call a service method, return a schema
 - Never access `os.environ`; use the Pydantic Settings object from `core/settings.py`
 - Raise typed exceptions from `common/exceptions.py`; let exception handlers format responses
-- Write migrations with `uv run alembic revision --autogenerate -m "<description>"` then review the generated file before applying
+- Write migrations with `uv run alembic revision --autogenerate -m "<description>"`, review the generated file, then **always run `uv run alembic upgrade head` to apply it** before considering the task done
+- After applying, verify the schema is healthy: run `uv run alembic current` to confirm the head revision is active, and `uv run alembic check` (or autogenerate a no-op revision and confirm it's empty) to ensure the ORM models and DB schema are in sync with no drift or SQL errors
 - Every new module gets a corresponding test file under `tests/`
 
 ## Code style

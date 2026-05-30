@@ -45,3 +45,4 @@ apps/api/.python-version
 
 # Playwright QA screenshots (local evidence, not committed)
 playwright-tests/screenshots/
+.playwright-mcp
