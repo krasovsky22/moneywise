@@ -19,8 +19,17 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 ## In scope (MVP)
 
 - **Stage 1: extract structured data from the file.**
-  - PDF: use deterministic text/table extraction (pdfplumber). If extraction yields no usable content (image-only PDFs), fail with `unreadable_pdf`. Vision-based extraction is V1.
-  - CSV: read into rows; look up `IssuerSchema` by column fingerprint (SHA-256 of sorted headers). If a cached schema exists, apply the `column_mapping` to produce canonical field names — no AI needed for this step. If no cached schema, the AI stage detects and normalizes the schema, and the result is saved to `IssuerSchema` for future uploads.
+  - **PDF — page-by-page extraction:**
+    1. Split the PDF into individual pages using pdfplumber.
+    2. Classify each page as `transaction_page | boilerplate_page` using a cheap heuristic: a page is a transaction page if it contains ≥1 date pattern (e.g. `MM/DD/YY`) within a few tokens of a dollar amount pattern (e.g. `$X,XXX.XX` or a bare signed decimal). This regex check is free and correctly identifies transaction pages without an AI call. (See real examples: Amex 18-page PDF has transactions only on pages 3–8; pages 9–17 are legal boilerplate and page 18 is blank. Chase 4-page bank PDF has all transactions on page 1; pages 2–4 are disclosures/blank.)
+    3. Run text/table extraction only on classified transaction pages. If zero pages are classified as transaction pages, fail with `unreadable_pdf`.
+    4. Each page yields a list of raw row dicts. These are concatenated into a single ordered list before the AI stage.
+  - **PDF — known structural quirks to handle:**
+    - **Multi-cardholder sections** (e.g. Amex groups charges under each authorized user's name): the AI must be told to carry the cardholder section header through as context, but for MVP all transactions are attributed to the primary card (`card_id`) the user selected on upload. Per-authorized-user attribution is V1.
+    - **Running balance column** (e.g. Chase bank statements include a `BALANCE` column after `AMOUNT`): treat as non-transactional metadata; never confuse it for a second amount.
+    - **Foreign spend column** (e.g. Amex shows original currency alongside the converted USD amount): for MVP (USD-only), use only the already-converted USD amount and discard the foreign currency column entirely.
+    - **Section headers that are not transactions** (e.g. "Payments and Credits Summary", "New Charges Details", "Fees", "Interest Charged"): the AI prompt must explicitly instruct the model to skip summary rows and section headers.
+  - **CSV:** read into rows; look up `IssuerSchema` by column fingerprint (SHA-256 of sorted headers). If a cached schema exists, apply the `column_mapping` to produce canonical field names — no AI needed for this step. If no cached schema, the AI stage detects and normalizes the schema, and the result is saved to `IssuerSchema` for future uploads.
   - Amount signs are flipped to match the convention in Epic 03 D2 during this stage (not in the AI stage), so the AI always receives pre-signed amounts.
 - **Stage 2: send extracted rows to an LLM for normalization + categorization in a single call** where reasonable, with structured JSON output.
   - Normalize merchant strings (e.g., `SQ *COFFEE BAR #1234` → `Coffee Bar`).
@@ -51,17 +60,18 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 
 ### Standard processing
 1. Statement ingestion (Epic 03) enqueues a parse job.
-2. **Extract:** Worker extracts text/rows from the file (PDF → pdfplumber; CSV → pandas).
-   - PDF with no extractable text → fail with `unreadable_pdf`.
-3. **Schema resolution (CSV only):** Look up `IssuerSchema` by column fingerprint.
+2. **Page classification (PDF only):** Split PDF into pages. Run heuristic regex check on each page. Collect transaction pages; discard boilerplate. If no transaction pages found → fail `unreadable_pdf`.
+3. **Extract:** Run pdfplumber on each transaction page individually; concatenate the row lists in page order. For CSV: read with pandas.
+4. **Schema resolution (CSV only):** Look up `IssuerSchema` by column fingerprint.
    - Cache hit → apply stored `column_mapping`. No AI call.
    - Cache miss → AI identifies column roles, saves new `IssuerSchema` row, continues.
-4. **Sign normalization:** Flip amount signs to convention (negative = expense) before the next stage.
-5. **AI normalization + categorization:** Send pre-structured rows to LLM.
-   - Input: canonical-field rows, known card metadata, predefined category list.
+5. **Sign normalization:** Flip amounts to convention (negative = expense). Drop irrelevant columns (balance, foreign spend).
+6. **AI normalization + categorization:** Send pre-structured rows to LLM.
+   - Input: canonical-field rows, known card metadata, predefined category list, page count processed.
    - Output: JSON array of `{date_iso, amount, merchant_clean, merchant_raw, transaction_type, category, confidence_per_field, notes}` plus `statement_total_observed` and `statement_period`.
-6. **Validate:** schema conformance, total reconciliation, date range sanity.
-7. **Write:** Insert `Transaction` rows, update `Statement.issuer_schema_id`, set statement status:
+   - Chunked at 100 rows per call if needed; results merged in order.
+7. **Validate:** schema conformance, total reconciliation (sum across all chunks), date range sanity.
+8. **Write:** Insert `Transaction` rows, update `Statement.issuer_schema_id`, set statement status:
    - All confidences ≥ threshold and total matches → `ready`.
    - Otherwise → `needs_review`.
 
@@ -105,6 +115,36 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 - **Hallucinated transactions:** the LLM can invent rows. The reconciliation check is our primary defense; a secondary check would compare merchant strings to actual substrings of the source text.
 - **Date parsing across locales:** US-only MVP — but issuers sometimes use ambiguous formats. Always require the LLM to also output an ISO date and validate it falls within the statement period.
 - **Privacy:** LLM provider contract must include zero-retention. Open question: do we still send the *whole* statement, or pre-redact PANs first? Recommend pre-redact.
+
+## Statement examples
+
+Real statement files used during design are in `docs/product/epics/examples/transactions/`. Use these for parser development and acceptance testing.
+
+### `amex/2026-05-22.pdf` — American Express Platinum (18 pages)
+
+| Aspect | Detail |
+|---|---|
+| Transaction pages | 3–8 (heuristic correctly fires on all six; pages 9–17 are legal boilerplate, page 18 blank) |
+| Transaction columns | `Date`, `Description`, `Type`, `Foreign Spend`, `Amount` |
+| Amount sign (raw) | Positive for charges — **must flip** to negative per D2 |
+| Credits/payments sign | Already negative in source — keep as positive per D2 |
+| Multi-cardholder | Yes — "VLADISLAV KRASOVSKI Card Ending 1-24007" and "RIZGEE ANN KRASOUSKI Card Ending 1-23017" sections interleaved; MVP links all to the primary card |
+| Foreign spend | Some rows have original currency (Philippine Pesos, Taiwan Dollars) + converted USD; use USD amount only |
+| Statement total | New Charges = $3,337.50 (use for reconciliation check) |
+| Period | Closing date 05/22/26; billing period implied ~30 days |
+| Noise to filter | Payments section, Credits section, Fees row, Interest row, all boilerplate pages |
+
+### `chase/20260513-statements-6902-.pdf` — Chase Total Checking (4 pages)
+
+| Aspect | Detail |
+|---|---|
+| Transaction pages | 1 only (all 7 transactions fit on page 1; pages 2–4 are disclosures/blank) |
+| Transaction columns | `DATE`, `DESCRIPTION`, `AMOUNT`, `BALANCE` |
+| Amount sign (raw) | Already signed — deposits positive, withdrawals negative — **no flip needed** |
+| Running balance | `BALANCE` column present; discard, not a transaction amount |
+| Statement total | Deposits 16,902.22; Electronic Withdrawals -2,528.44 (use for reconciliation) |
+| Period | April 14, 2026 through May 13, 2026 |
+| Noise to filter | "Beginning Balance" and "Ending Balance" rows in transaction table |
 
 ## Dependencies
 
