@@ -75,6 +75,40 @@ Visit:
 | `make migration MSG="..."` | Create a new migration |
 | `make logs` | Tail Docker logs |
 
+## Running Services Individually
+
+Use separate terminals when you only need one service or want isolated logs.
+
+```bash
+# Infrastructure only (Postgres + Redis)
+docker compose up -d
+
+# API server only (hot-reload)
+cd apps/api
+uv run uvicorn app.main:app --reload --port 8000
+
+# Web dev server only
+pnpm --filter web dev
+
+# Run in background (logs to file)
+uv run uvicorn app.main:app --reload --port 8000 > /tmp/api.log 2>&1 &
+pnpm --filter web dev > /tmp/web.log 2>&1 &
+```
+
+## Background / Worker Commands
+
+FastAPI processes short background tasks (e.g. statement parsing) in-process via `BackgroundTasks`. No separate worker process is needed for MVP.
+
+When a real job queue is introduced (Epic 04+), the worker will be started alongside the API:
+
+```bash
+# Placeholder — not yet wired
+cd apps/api
+uv run arq app.worker.WorkerSettings   # or: uv run rq worker
+```
+
+Until then, all background processing runs automatically when the API server is up.
+
 ## Adding a new API module
 
 1. Create `apps/api/src/app/modules/<name>/` with: `router.py`, `schemas.py`, `models.py`, `service.py`, `dependencies.py`

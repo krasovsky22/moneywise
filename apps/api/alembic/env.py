@@ -19,6 +19,7 @@ from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.bank_accounts import models as bank_accounts_models  # noqa: F401
 from app.modules.cards import models as cards_models  # noqa: F401
 from app.modules.household import models as household_models  # noqa: F401
+from app.modules.statements import models as statements_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 
 config = context.config

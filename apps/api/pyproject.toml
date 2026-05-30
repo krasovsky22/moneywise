@@ -16,6 +16,8 @@ dependencies = [
     "httpx>=0.28",
     "structlog>=24.4",
     "bcrypt<4.0",
+    "python-multipart>=0.0.9",
+    "aiofiles>=24.0",
 ]
 
 [dependency-groups]
@@ -27,6 +29,7 @@ dev = [
     "mypy>=1.14",
     "types-passlib",
     "types-python-jose",
+    "types-aiofiles",
 ]
 
 [build-system]
