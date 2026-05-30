@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, redirect, useRouter, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -57,6 +57,12 @@ function SignupPage() {
     resolver: zodResolver(signupSchema),
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
+
+  const watchedFields = form.watch();
+  useEffect(() => {
+    if (formError) setFormError(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedFields.email, watchedFields.password, watchedFields.confirmPassword]);
 
   const mutation = useMutation({
     mutationFn: async (values: SignupFormValues) => {

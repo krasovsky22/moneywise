@@ -42,3 +42,6 @@ apps/web/src/routeTree.gen.ts
 
 # uv — .python-version is auto-managed by uv; uv.lock IS committed for reproducibility
 apps/api/.python-version
+
+# Playwright QA screenshots (local evidence, not committed)
+playwright-tests/screenshots/

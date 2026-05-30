@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   createFileRoute,
   redirect,
@@ -34,7 +34,6 @@ export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
   beforeLoad: () => {
     if (useAuthStore.getState().accessToken) {
-      console.log("here");
       throw redirect({ to: "/secure/dashboard" });
     }
   },
@@ -58,6 +57,11 @@ function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  const watchedFields = form.watch();
+  useEffect(() => {
+    if (formError) setFormError(null);
+  }, [watchedFields.email, watchedFields.password]);
 
   const mutation = useMutation({
     mutationFn: async (values: LoginFormValues) => {
