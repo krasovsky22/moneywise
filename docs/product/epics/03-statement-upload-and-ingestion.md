@@ -69,12 +69,97 @@ This epic owns the **lifecycle and UX** of statement processing. The AI parsing/
 - Confirm modal explicitly states how many transactions will be removed.
 - Manual transactions are unaffected.
 
+## Decisions
+
+The following are locked for MVP and must not drift in implementation:
+
+### D1 — Issuer schema caching
+When a statement is parsed for the first time from an unknown issuer format, the detected column mapping is stored in the `IssuerSchema` table and keyed by a fingerprint of the raw column headers (SHA-256 of sorted, lowercased headers). On any subsequent upload whose headers produce the same fingerprint, the cached mapping is applied directly — no AI call needed for schema detection. This applies to CSV files; PDF fingerprinting is deferred to V1.
+
+`IssuerSchema` records are **global** (not per-household). If one user uploads a Chase CSV, the next user's Chase CSV benefits automatically.
+
+### D2 — Amount sign convention
+Stored amounts are always from the account-holder's perspective:
+- **Negative** = money leaving the account (purchases, fees, cash advances).
+- **Positive** = money entering the account (refunds, credits, cashback, payment received).
+
+This is the opposite of how most bank PDFs present charges (they show purchases as positive). The parsing pipeline is responsible for flipping the sign before writing to the database. All downstream math (Dashboard, cashflow) must assume this convention without any additional sign logic.
+
+### D3 — Currency
+MVP supports **USD only**. The `currency` column exists on `Transaction` for future-proofing but is always written as `USD` and never exposed as a user-editable field. A statement containing non-USD amounts fails with `unsupported_format` until multi-currency is scoped.
+
+### D4 — File storage
+Uploaded statement files are stored on the **local filesystem** in dev (path: `data/statements/{household_id}/{statement_id}/{original_filename}`). The `Statement` row stores the relative path in `file_storage_path`. In production this path will point to an S3-compatible object key (e.g., Cloudflare R2) — the column name stays the same, only the value format changes. The UI retrieves the file via a signed download endpoint; the path is never exposed directly in API responses.
+
+---
+
 ## Data model implications
 
-New entities:
+### `IssuerSchema`
 
-- `Statement` — id, household_id, card_id (nullable FK), bank_account_id (nullable FK), uploaded_by_user_id, file_hash, file_storage_key, file_mime, file_size_bytes, file_original_name, period_start (nullable until parsed), period_end (nullable), status (enum), failure_reason (nullable enum), uploaded_at, processed_at, ai_cost_cents (nullable, for telemetry). Exactly one of card_id / bank_account_id must be non-null — enforced at the application layer.
-- `Transaction` (created here, owned conceptually by Epic 06) gets `source_statement_id` (nullable — null for manual).
+Stores detected column layouts so repeat uploads from the same issuer are parsed without an AI schema-detection call.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| issuer_name | varchar(100) | Human-readable label, e.g. `Chase`, `Amex`. Set by AI on first detection; editable by operator. |
+| file_format | enum `pdf\|csv` | |
+| column_fingerprint | varchar(64) | SHA-256 of sorted, lowercased raw column headers (CSV). For PDF, reserved for V1. |
+| column_mapping | jsonb | Maps canonical field names → raw header names. E.g. `{"date": "Transaction Date", "amount": "Amount", "description": "Description"}`. |
+| raw_headers | text[] | Original header strings as-found, stored for debugging. |
+| usage_count | int default 0 | Incremented each time this schema is applied. |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+| last_used_at | timestamptz | |
+
+Canonical field names in `column_mapping`: `date`, `posted_date`, `description`, `amount`, `debit`, `credit`, `reference`, `type`.
+
+When `debit` and `credit` are both present (split-column issuers like Citi), the parser merges them: `amount = -(debit ?? 0) + (credit ?? 0)` to produce the signed value per D2.
+
+---
+
+### `Statement`
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| household_id | uuid FK | |
+| card_id | uuid nullable FK | Exactly one of card_id / bank_account_id must be non-null (app-layer constraint). |
+| bank_account_id | uuid nullable FK | |
+| uploaded_by_user_id | uuid FK | |
+| issuer_schema_id | uuid nullable FK → IssuerSchema | Populated when a matching schema is found or created during parsing. |
+| file_hash | varchar(64) | SHA-256 of raw file bytes. Used for duplicate detection. |
+| file_storage_path | varchar(500) | Relative path on disk (dev) or object key (prod). Never returned raw in API responses. |
+| file_mime | varchar(100) | `application/pdf` or `text/csv`. |
+| file_size_bytes | int | |
+| file_original_name | varchar(255) | Original filename from the upload. |
+| period_start | date nullable | Null until parsed; can be overridden by user. |
+| period_end | date nullable | Null until parsed; can be overridden by user. |
+| status | enum | `queued → parsing → categorizing → needs_review → ready → failed` |
+| failure_reason | enum nullable | `unreadable_pdf \| encrypted \| unsupported_format \| parsing_error \| ai_unavailable` |
+| uploaded_at | timestamptz | |
+| processed_at | timestamptz nullable | Set when status reaches `ready` or `failed`. |
+| ai_cost_cents | int nullable | Sum of all LLM call costs for this statement, in USD cents × 100. |
+
+---
+
+### `Transaction` *(additions relevant to this epic)*
+
+Full definition lives in Epic 06. Columns added or constrained here:
+
+| Column | Type | Notes |
+|---|---|---|
+| source_statement_id | uuid nullable FK → Statement | Null for manually-entered transactions. |
+| occurred_on | date | Transaction date (from statement). |
+| posted_on | date nullable | Posted/settlement date if the statement provides it separately. |
+| amount | numeric(12,2) | Signed per D2: negative = expense, positive = credit/refund. |
+| currency | varchar(3) default `USD` | Always `USD` in MVP (see D3). |
+| transaction_type | enum | `purchase \| payment \| fee \| cash_advance \| credit \| refund`. Payments to the card are stored but excluded from expense aggregations. |
+| merchant_raw | varchar(500) | Verbatim string from the statement. |
+| merchant_clean | varchar(255) nullable | AI-normalized name, e.g. `Coffee Bar`. Null until Epic 04 runs. |
+| category_id | uuid nullable FK | |
+| is_user_confirmed | bool default false | Set to true when user confirms via review UI. |
+| confidence | jsonb nullable | Per-field confidence scores from AI, e.g. `{"amount": 0.99, "category": 0.72}`. |
 
 ## API surface (high-level)
 

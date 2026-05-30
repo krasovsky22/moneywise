@@ -18,9 +18,10 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 
 ## In scope (MVP)
 
-- **Stage 1: extract structured transactions from the PDF.**
-  - Prefer cheap, deterministic PDF text extraction first.
-  - If text extraction yields no usable content (image PDFs), the pipeline fails with the `unreadable_pdf` reason. **Vision-based extraction is V1 — not MVP.**
+- **Stage 1: extract structured data from the file.**
+  - PDF: use deterministic text/table extraction (pdfplumber). If extraction yields no usable content (image-only PDFs), fail with `unreadable_pdf`. Vision-based extraction is V1.
+  - CSV: read into rows; look up `IssuerSchema` by column fingerprint (SHA-256 of sorted headers). If a cached schema exists, apply the `column_mapping` to produce canonical field names — no AI needed for this step. If no cached schema, the AI stage detects and normalizes the schema, and the result is saved to `IssuerSchema` for future uploads.
+  - Amount signs are flipped to match the convention in Epic 03 D2 during this stage (not in the AI stage), so the AI always receives pre-signed amounts.
 - **Stage 2: send extracted rows to an LLM for normalization + categorization in a single call** where reasonable, with structured JSON output.
   - Normalize merchant strings (e.g., `SQ *COFFEE BAR #1234` → `Coffee Bar`).
   - Assign a category from the predefined taxonomy.
@@ -50,12 +51,17 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 
 ### Standard processing
 1. Statement ingestion (Epic 03) enqueues a parse job.
-2. Worker extracts text from the PDF. If empty, fail with `unreadable_pdf`.
-3. Worker sends extracted lines to LLM with a structured prompt:
-   - Input: statement text, known card metadata, predefined category list.
-   - Output: JSON array of `{date, amount, merchant_clean, merchant_raw, category, confidence_fields, notes}` plus `statement_total_observed` and `statement_period`.
-4. Worker validates: schema, total reconciliation, date ranges.
-5. Worker writes transactions, sets statement status:
+2. **Extract:** Worker extracts text/rows from the file (PDF → pdfplumber; CSV → pandas).
+   - PDF with no extractable text → fail with `unreadable_pdf`.
+3. **Schema resolution (CSV only):** Look up `IssuerSchema` by column fingerprint.
+   - Cache hit → apply stored `column_mapping`. No AI call.
+   - Cache miss → AI identifies column roles, saves new `IssuerSchema` row, continues.
+4. **Sign normalization:** Flip amount signs to convention (negative = expense) before the next stage.
+5. **AI normalization + categorization:** Send pre-structured rows to LLM.
+   - Input: canonical-field rows, known card metadata, predefined category list.
+   - Output: JSON array of `{date_iso, amount, merchant_clean, merchant_raw, transaction_type, category, confidence_per_field, notes}` plus `statement_total_observed` and `statement_period`.
+6. **Validate:** schema conformance, total reconciliation, date range sanity.
+7. **Write:** Insert `Transaction` rows, update `Statement.issuer_schema_id`, set statement status:
    - All confidences ≥ threshold and total matches → `ready`.
    - Otherwise → `needs_review`.
 
@@ -71,9 +77,10 @@ This epic owns the **AI pipeline**: prompts, models, fallback logic, accuracy va
 
 ## Data model implications
 
-- `Transaction` — id, household_id, card_id, source_statement_id (nullable), occurred_on (date), amount (money, signed: positive=charge, negative=credit/return), merchant_clean, merchant_raw, category_id (nullable), notes, is_user_confirmed (bool), confidence (jsonb: per-field scores), created_at, updated_at.
+- `Transaction` — see Epic 03 for the full column list. Amount sign convention (locked in Epic 03 D2): **negative = expense/charge, positive = credit/refund**. The AI pipeline must flip signs from issuer representation before writing. `transaction_type` must be set on every row; rows with `type=payment` are stored but excluded from expense aggregations.
 - `CategoryRule` (defined fully in Epic 05).
-- Reuses `Statement.ai_cost_cents`, `Statement.status`, `Statement.failure_reason` from Epic 03.
+- Reuses `Statement.ai_cost_cents`, `Statement.status`, `Statement.failure_reason`, and `Statement.issuer_schema_id` from Epic 03.
+- The pipeline reads `IssuerSchema.column_mapping` (Epic 03) before the AI call so that rows are pre-normalized to canonical field names. The AI stage receives structured rows, not raw text, which reduces token usage and hallucination risk.
 
 ## API surface (high-level)
 
