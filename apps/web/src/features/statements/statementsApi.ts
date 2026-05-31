@@ -96,3 +96,7 @@ export async function deleteStatement(id: string): Promise<void> {
 export async function reprocessStatement(id: string): Promise<Statement> {
   return apiClient.post(`api/v1/statements/${id}/reprocess`).json<Statement>();
 }
+
+export async function fetchStatementFileBlob(id: string): Promise<Blob> {
+  return apiClient.get(`api/v1/statements/${id}/file`).blob();
+}

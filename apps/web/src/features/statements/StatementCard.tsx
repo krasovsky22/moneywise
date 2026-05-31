@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Trash2, Loader2, AlertTriangle, Eye } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { StatementStatusBadge } from "./StatementStatusBadge";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { PdfViewerModal } from "./PdfViewerModal";
 import { useStatementStatus, useReprocessStatement, statementKeys } from "./useStatements";
 import type { Statement, StatementStatus } from "./statementsApi";
 
@@ -56,6 +57,7 @@ const PollingUpdater = ({ id }: { id: string }) => {
 
 export const StatementCard = ({ statement, accountLabel }: StatementCardProps) => {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const reprocess = useReprocessStatement();
   const isActive = ACTIVE_STATUSES.has(statement.status);
 
@@ -81,6 +83,15 @@ export const StatementCard = ({ statement, accountLabel }: StatementCardProps) =
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StatementStatusBadge status={statement.status} />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`View ${statement.file_original_name}`}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={() => setViewOpen(true)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -143,6 +154,12 @@ export const StatementCard = ({ statement, accountLabel }: StatementCardProps) =
         fileName={statement.file_original_name}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
+      />
+      <PdfViewerModal
+        statementId={statement.id}
+        fileName={statement.file_original_name}
+        open={viewOpen}
+        onOpenChange={setViewOpen}
       />
     </>
   );

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -13,6 +14,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -152,6 +154,24 @@ async def get_statement_status_route(
     statement: Statement = Depends(get_statement_or_404),
 ) -> Statement:
     return statement
+
+
+@router.get("/{statement_id}/file", response_class=FileResponse)
+async def get_statement_file_route(
+    statement: Statement = Depends(get_statement_or_404),
+) -> FileResponse:
+    if not statement.file_storage_path:
+        raise HTTPException(status_code=404, detail="File not found.")
+    path = Path(statement.file_storage_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk.")
+    return FileResponse(
+        path=path,
+        media_type=statement.file_mime,
+        headers={
+            "Content-Disposition": f'inline; filename="{statement.file_original_name}"',
+        },
+    )
 
 
 @router.delete("/{statement_id}", status_code=status.HTTP_204_NO_CONTENT)
