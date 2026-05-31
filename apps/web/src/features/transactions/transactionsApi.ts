@@ -43,9 +43,15 @@ export async function listTransactions(statementId: string): Promise<Transaction
 
 export async function updateTransaction(
   id: string,
-  body: TransactionUpdate
+  body: TransactionUpdate,
+  createRule = true,
 ): Promise<Transaction> {
-  return apiClient.patch(`api/v1/transactions/${id}`, { json: body }).json<Transaction>();
+  return apiClient
+    .patch(`api/v1/transactions/${id}`, {
+      json: body,
+      searchParams: { create_rule: String(createRule) },
+    })
+    .json<Transaction>();
 }
 
 export async function confirmStatement(statementId: string): Promise<StatementConfirmResponse> {

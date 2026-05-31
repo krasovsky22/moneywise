@@ -20,6 +20,8 @@ from app.modules.transactions.service import (
     list_transactions,
     update_transaction,
 )
+from app.modules.users.dependencies import get_current_user
+from app.modules.users.models import User
 
 router = APIRouter(tags=["transactions"])
 
@@ -43,13 +45,22 @@ async def list_transactions_route(
 async def update_transaction_route(
     transaction_id: uuid.UUID,
     body: TransactionUpdate,
+    create_rule: bool = True,
     household_id: uuid.UUID = Depends(get_household_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Transaction:
     transaction = await get_transaction(db, transaction_id, household_id)
     if transaction is None:
         raise NotFoundError("Transaction not found")
-    return await update_transaction(db, transaction, body)
+    return await update_transaction(
+        db,
+        transaction,
+        body,
+        household_id=household_id,
+        user_id=current_user.id,
+        create_rule=create_rule,
+    )
 
 
 @router.post(

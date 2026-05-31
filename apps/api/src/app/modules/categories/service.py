@@ -306,6 +306,36 @@ async def create_rule(
     return rule
 
 
+async def upsert_rule(
+    session: AsyncSession,
+    household_id: uuid.UUID,
+    user_id: uuid.UUID,
+    pattern: str,
+    category_id: uuid.UUID,
+) -> CategoryRule:
+    result = await session.execute(
+        select(CategoryRule).where(
+            CategoryRule.household_id == household_id,
+            CategoryRule.pattern == pattern,
+        )
+    )
+    rule = result.scalar_one_or_none()
+    if rule is not None:
+        rule.category_id = category_id
+        await session.flush()
+        return rule
+    new_rule = CategoryRule(
+        household_id=household_id,
+        pattern=pattern,
+        match_type="substring",
+        category_id=category_id,
+        created_by_user_id=user_id,
+    )
+    session.add(new_rule)
+    await session.flush()
+    return new_rule
+
+
 async def delete_rule(
     session: AsyncSession, rule_id: uuid.UUID, household_id: uuid.UUID
 ) -> bool:
@@ -313,6 +343,25 @@ async def delete_rule(
         select(CategoryRule).where(
             CategoryRule.id == rule_id,
             CategoryRule.household_id == household_id,
+        )
+    )
+    rule = result.scalar_one_or_none()
+    if rule is None:
+        return False
+    await session.delete(rule)
+    await session.flush()
+    return True
+
+
+async def delete_rule_by_merchant(
+    session: AsyncSession,
+    household_id: uuid.UUID,
+    pattern: str,
+) -> bool:
+    result = await session.execute(
+        select(CategoryRule).where(
+            CategoryRule.household_id == household_id,
+            CategoryRule.pattern == pattern,
         )
     )
     rule = result.scalar_one_or_none()

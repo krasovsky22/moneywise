@@ -1,34 +1,19 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useTransactions, useUpdateTransaction, useConfirmStatement } from "@/features/transactions/useTransactions";
-import { useCategories, useCreateRule } from "@/features/categories/useCategories";
+import { useCategories, useDeleteRuleByMerchant } from "@/features/categories/useCategories";
 import { TransactionRow } from "@/features/transactions/TransactionRow";
 import type { TransactionUpdate } from "@/features/transactions/transactionsApi";
-
-interface RuleSuggestion {
-  merchantClean: string;
-  categoryId: string;
-  categoryName: string;
-}
+import type { Category } from "@/features/categories/categoriesApi";
 
 interface StatementReviewProps {
   statementId: string;
 }
 
-function findCategoryName(
-  categories: import("@/features/categories/categoriesApi").Category[],
-  id: string
-): string {
+function findCategoryName(categories: Category[], id: string): string {
   for (const cat of categories) {
     if (cat.id === id) return cat.name;
     for (const child of cat.children) {
@@ -43,41 +28,36 @@ export const StatementReview = ({ statementId }: StatementReviewProps) => {
   const { data: categories = [], isLoading: catLoading } = useCategories();
   const updateTransaction = useUpdateTransaction();
   const confirmStatement = useConfirmStatement(statementId);
-  const createRule = useCreateRule();
-
-  const [ruleSuggestion, setRuleSuggestion] = useState<RuleSuggestion | null>(null);
+  const deleteRuleByMerchant = useDeleteRuleByMerchant();
 
   const handleUpdate = useCallback(
     (id: string, update: TransactionUpdate) => {
-      updateTransaction.mutate({ id, body: update });
-
-      if (update.category_id && transactions) {
-        const tx = transactions.find((t) => t.id === id);
-        if (tx) {
-          const categoryName = findCategoryName(categories, update.category_id);
-          setRuleSuggestion({
-            merchantClean: tx.merchant_clean,
-            categoryId: update.category_id,
-            categoryName,
-          });
-        }
-      }
+      updateTransaction.mutate(
+        { id, body: update, createRule: true },
+        {
+          onSuccess: () => {
+            if (update.category_id && transactions) {
+              const tx = transactions.find((t) => t.id === id);
+              if (tx) {
+                const categoryName = findCategoryName(categories, update.category_id!);
+                const merchant = tx.merchant_clean;
+                toast.success(`Rule saved: ${merchant} → ${categoryName}`, {
+                  duration: 4000,
+                  action: {
+                    label: "Undo",
+                    onClick: () => {
+                      deleteRuleByMerchant.mutate(merchant);
+                    },
+                  },
+                });
+              }
+            }
+          },
+        },
+      );
     },
-    [updateTransaction, transactions, categories]
+    [updateTransaction, transactions, categories, deleteRuleByMerchant],
   );
-
-  const handleAcceptRule = () => {
-    if (!ruleSuggestion) return;
-    createRule.mutate({
-      pattern: ruleSuggestion.merchantClean,
-      category_id: ruleSuggestion.categoryId,
-    });
-    setRuleSuggestion(null);
-  };
-
-  const handleSkipRule = () => {
-    setRuleSuggestion(null);
-  };
 
   const isLoading = txLoading || catLoading;
 
@@ -94,88 +74,71 @@ export const StatementReview = ({ statementId }: StatementReviewProps) => {
   const lowConfidenceCount = txList.filter((t) => t.is_low_confidence).length;
   const unconfirmedCount = txList.filter((t) => !t.is_user_confirmed).length;
 
-  return (
-    <>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">
-              {txList.length} transaction{txList.length !== 1 ? "s" : ""}
-              {lowConfidenceCount > 0 && (
-                <span className="ml-2 text-amber-600 dark:text-amber-400">
-                  — {lowConfidenceCount} need{lowConfidenceCount !== 1 ? "" : "s"} review
-                </span>
-              )}
-            </p>
-          </div>
+  const merchantCategoryMap = new Map<string, Set<string | null>>();
+  for (const tx of txList) {
+    const existing = merchantCategoryMap.get(tx.merchant_clean) ?? new Set();
+    existing.add(tx.category_id);
+    merchantCategoryMap.set(tx.merchant_clean, existing);
+  }
 
-          <Button
-            size="sm"
-            disabled={confirmStatement.isPending || txList.length === 0}
-            onClick={() => confirmStatement.mutate()}
-            aria-label={`Confirm all transactions in this statement`}
-          >
-            {confirmStatement.isPending && (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">
+            {txList.length} transaction{txList.length !== 1 ? "s" : ""}
+            {lowConfidenceCount > 0 && (
+              <span className="ml-2 text-amber-600 dark:text-amber-400">
+                — {lowConfidenceCount} need{lowConfidenceCount !== 1 ? "" : "s"} review
+              </span>
             )}
-            Confirm All{unconfirmedCount > 0 ? ` (${unconfirmedCount} remaining)` : ""}
-          </Button>
+          </p>
         </div>
 
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="grid grid-cols-[100px_1fr_100px_90px_180px_40px] gap-3 border-b bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
-            <span>Date</span>
-            <span>Merchant</span>
-            <span className="text-right">Amount</span>
-            <span>Type</span>
-            <span>Category</span>
-            <span className="text-center">Done</span>
-          </div>
+        <Button
+          size="sm"
+          disabled={confirmStatement.isPending || txList.length === 0}
+          onClick={() => confirmStatement.mutate()}
+          aria-label={`Confirm all transactions in this statement`}
+        >
+          {confirmStatement.isPending && (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          )}
+          Confirm All{unconfirmedCount > 0 ? ` (${unconfirmedCount} remaining)` : ""}
+        </Button>
+      </div>
 
-          {txList.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              No transactions found.
-            </div>
-          ) : (
-            txList.map((tx) => (
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="grid grid-cols-[100px_1fr_100px_90px_180px_40px] gap-3 border-b bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <span>Date</span>
+          <span>Merchant</span>
+          <span className="text-right">Amount</span>
+          <span>Type</span>
+          <span>Category</span>
+          <span className="text-center">Done</span>
+        </div>
+
+        {txList.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            No transactions found.
+          </div>
+        ) : (
+          txList.map((tx) => {
+            const categorySet = merchantCategoryMap.get(tx.merchant_clean);
+            const hasCategoryConflict =
+              categorySet !== undefined && categorySet.size > 1;
+            return (
               <TransactionRow
                 key={tx.id}
                 transaction={tx}
                 categories={categories}
                 onUpdate={handleUpdate}
+                hasCategoryConflict={hasCategoryConflict}
               />
-            ))
-          )}
-        </div>
+            );
+          })
+        )}
       </div>
-
-      <Dialog open={!!ruleSuggestion} onOpenChange={(open) => !open && setRuleSuggestion(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save categorization rule?</DialogTitle>
-            <DialogDescription>
-              Always categorize{" "}
-              <span className="font-medium text-foreground">
-                &ldquo;{ruleSuggestion?.merchantClean}&rdquo;
-              </span>{" "}
-              as{" "}
-              <span className="font-medium text-foreground">
-                &ldquo;{ruleSuggestion?.categoryName}&rdquo;
-              </span>
-              ?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleSkipRule}>
-              Skip
-            </Button>
-            <Button onClick={handleAcceptRule} disabled={createRule.isPending}>
-              {createRule.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Accept
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 };

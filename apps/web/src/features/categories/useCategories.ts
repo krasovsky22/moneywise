@@ -4,6 +4,7 @@ import {
   listRules,
   createRule,
   deleteRule,
+  deleteRuleByMerchant,
   createCategory,
   deleteCategory,
   type CategoryRuleCreate,
@@ -45,6 +46,16 @@ export function useDeleteRule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteRule(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: categoryKeys.rules() });
+    },
+  });
+}
+
+export function useDeleteRuleByMerchant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pattern: string) => deleteRuleByMerchant(pattern),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: categoryKeys.rules() });
     },

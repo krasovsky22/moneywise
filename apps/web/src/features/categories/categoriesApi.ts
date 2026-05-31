@@ -66,3 +66,9 @@ export async function createRule(
 export async function deleteRule(id: string): Promise<void> {
   await apiClient.delete(`api/v1/categories/rules/${id}`);
 }
+
+export async function deleteRuleByMerchant(pattern: string): Promise<void> {
+  await apiClient.delete("api/v1/categories/rules/by-merchant", {
+    searchParams: { pattern },
+  });
+}

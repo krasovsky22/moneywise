@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import NotFoundError
@@ -19,6 +19,7 @@ from app.modules.categories.service import (
     create_rule,
     delete_category,
     delete_rule,
+    delete_rule_by_merchant,
     list_categories,
     list_rules,
 )
@@ -105,6 +106,17 @@ async def create_rule_route(
         match_type=body.match_type,
     )
     return CategoryRuleResponse.model_validate(rule)
+
+
+@router.delete("/rules/by-merchant", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_rule_by_merchant_route(
+    pattern: str = Query(...),
+    household_id: uuid.UUID = Depends(get_household_id),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    deleted = await delete_rule_by_merchant(db, household_id, pattern)
+    if not deleted:
+        raise NotFoundError("Rule not found")
 
 
 @router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -24,11 +24,16 @@ export function useTransactions(statementId: string) {
 export function useUpdateTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: TransactionUpdate }) =>
-      updateTransaction(id, body),
+    mutationFn: ({
+      id,
+      body,
+      createRule = true,
+    }: {
+      id: string;
+      body: TransactionUpdate;
+      createRule?: boolean;
+    }) => updateTransaction(id, body, createRule),
     onSuccess: () => {
-      // Invalidate all transaction lists (we don't know the statementId here without context,
-      // so invalidate the broader key)
       void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });

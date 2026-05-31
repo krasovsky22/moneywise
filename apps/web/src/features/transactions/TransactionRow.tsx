@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ interface TransactionRowProps {
   transaction: Transaction;
   categories: Category[];
   onUpdate: (id: string, update: TransactionUpdate) => void;
+  hasCategoryConflict?: boolean;
 }
 
 const TYPE_CONFIG: Record<
@@ -33,6 +34,7 @@ export const TransactionRow = ({
   transaction,
   categories,
   onUpdate,
+  hasCategoryConflict = false,
 }: TransactionRowProps) => {
   const [merchantValue, setMerchantValue] = useState(transaction.merchant_clean);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,13 +85,23 @@ export const TransactionRow = ({
       <span className="text-xs tabular-nums text-muted-foreground">{transaction.date}</span>
 
       <div className="min-w-0">
-        <Input
-          value={merchantValue}
-          onChange={handleMerchantChange}
-          onBlur={handleMerchantBlur}
-          className="h-7 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-1"
-          aria-label={`Merchant name for transaction on ${transaction.date}`}
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            value={merchantValue}
+            onChange={handleMerchantChange}
+            onBlur={handleMerchantBlur}
+            className="h-7 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-1"
+            aria-label={`Merchant name for transaction on ${transaction.date}`}
+          />
+          {hasCategoryConflict && (
+            <span title="Multiple categories for this merchant">
+              <TriangleAlert
+                className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                aria-label="Multiple categories for this merchant"
+              />
+            </span>
+          )}
+        </div>
         {transaction.merchant_raw !== transaction.merchant_clean && (
           <p className="truncate px-1 text-[10px] text-muted-foreground/60">
             {transaction.merchant_raw}

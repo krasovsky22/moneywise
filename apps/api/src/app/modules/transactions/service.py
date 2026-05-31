@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.categories.service import upsert_rule
 from app.modules.statements.models import Statement, StatementStatus
 from app.modules.transactions.models import Transaction
 from app.modules.transactions.schemas import TransactionUpdate
@@ -45,11 +46,24 @@ async def update_transaction(
     session: AsyncSession,
     transaction: Transaction,
     update_data: TransactionUpdate,
+    household_id: uuid.UUID,
+    user_id: uuid.UUID,
+    create_rule: bool = True,
 ) -> Transaction:
     for field, value in update_data.model_dump(exclude_unset=True).items():
         setattr(transaction, field, value)
     transaction.updated_at = datetime.now(UTC)
     await session.flush()
+
+    if create_rule and update_data.category_id is not None:
+        await upsert_rule(
+            session,
+            household_id=household_id,
+            user_id=user_id,
+            pattern=transaction.merchant_clean,
+            category_id=update_data.category_id,
+        )
+
     return transaction
 
 
