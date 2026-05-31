@@ -63,7 +63,6 @@ function CategoriesCard() {
   const [icon, setIcon] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  console.log("1111111", categories);
   const topLevel = categories ?? [];
 
   function resetForm() {
@@ -269,25 +268,34 @@ function CategoriesList({
 }: CategoriesListProps) {
   const [systemExpanded, setSystemExpanded] = useState(false);
   const system = categories.filter((c) => c.is_system);
-  const custom = categories.filter((c) => !c.is_system);
-
-  console.log("asdasdasd", categories, custom, system);
+  // Recursively collect custom categories whose immediate parent is system (or null)
+  const custom = extractCustomRoots(categories);
 
   return (
-    <div className="space-y-1">
-      {custom.length > 0 && (
-        <ul className="space-y-1">
-          {custom.map((cat) => (
-            <CategoryRow
-              key={cat.id}
-              cat={cat}
-              onDelete={onDelete}
-              deletingId={deletingId}
-              isDeleting={isDeleting}
-            />
-          ))}
-        </ul>
-      )}
+    <div className="space-y-3">
+      <div>
+        <p className="px-2 pb-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Your categories
+        </p>
+        {custom.length > 0 ? (
+          <ul className="space-y-1">
+            {custom.map(({ cat, parent }) => (
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                onDelete={onDelete}
+                deletingId={deletingId}
+                isDeleting={isDeleting}
+                parentName={parent ? `${parent.icon ? parent.icon + " " : ""}${parent.name}` : undefined}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">
+            No custom categories yet.
+          </p>
+        )}
+      </div>
 
       {system.length > 0 && (
         <div>
@@ -328,6 +336,7 @@ interface CategoryRowProps {
   deletingId: string | null;
   isDeleting: boolean;
   depth?: number;
+  parentName?: string;
 }
 
 function CategoryRow({
@@ -336,6 +345,7 @@ function CategoryRow({
   deletingId,
   isDeleting,
   depth = 0,
+  parentName,
 }: CategoryRowProps) {
   const [expanded, setExpanded] = useState(false);
   const hasChildren = cat.children.length > 0;
@@ -369,7 +379,12 @@ function CategoryRow({
           <span className="shrink-0 text-base leading-none">{cat.icon}</span>
         )}
 
-        <span className="flex-1 truncate font-medium">{cat.name}</span>
+        <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+          {parentName && (
+            <span className="shrink-0 text-xs text-muted-foreground">{parentName} /</span>
+          )}
+          <span className="truncate font-medium">{cat.name}</span>
+        </span>
 
         <span
           className={cn(
@@ -596,6 +611,23 @@ function RulesCard() {
       </CardContent>
     </Card>
   );
+}
+
+// Returns custom categories with their immediate system parent (if any).
+// Stops recursing into a subtree once a custom root is found, so custom children render via CategoryRow.
+function extractCustomRoots(
+  cats: Category[],
+  parent: Category | null = null,
+): { cat: Category; parent: Category | null }[] {
+  const result: { cat: Category; parent: Category | null }[] = [];
+  for (const cat of cats) {
+    if (!cat.is_system) {
+      result.push({ cat, parent });
+    } else if (cat.children.length > 0) {
+      result.push(...extractCustomRoots(cat.children, cat));
+    }
+  }
+  return result;
 }
 
 function flattenCategories(cats: Category[]): Category[] {
