@@ -1,4 +1,4 @@
-.PHONY: up down migrate seed logs install dev clean
+.PHONY: up down migrate seed logs install dev clean set-password
 
 # Start infrastructure (postgres + redis)
 up:
@@ -15,6 +15,11 @@ migrate:
 # Create a new migration (usage: make migration MSG="add users table")
 migration:
 	cd apps/api && uv run alembic revision --autogenerate -m "$(MSG)"
+
+# Set or reset a user's password by email (usage: make set-password EMAIL=user@example.com)
+# Omit PASSWORD to be prompted securely (recommended — keeps it out of shell history)
+set-password:
+	cd apps/api && uv run python -m app.cli set-password $(EMAIL) $(if $(PASSWORD),--password "$(PASSWORD)",)
 
 # Placeholder for seed data
 seed:

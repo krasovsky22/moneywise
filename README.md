@@ -74,6 +74,7 @@ Visit:
 | `make migrate` | Apply pending DB migrations |
 | `make migration MSG="..."` | Create a new migration |
 | `make logs` | Tail Docker logs |
+| `make set-password EMAIL=...` | Set or reset a user's password |
 
 ## Running Services Individually
 
@@ -108,6 +109,25 @@ uv run arq app.worker.WorkerSettings   # or: uv run rq worker
 ```
 
 Until then, all background processing runs automatically when the API server is up.
+
+## Management CLI
+
+The API ships a management CLI for administrative tasks that shouldn't go through the HTTP API.
+
+```bash
+# Set / reset a password — prompts securely, nothing in shell history (recommended)
+make set-password EMAIL=user@example.com
+
+# Pass password directly (useful in CI/scripts)
+make set-password EMAIL=user@example.com PASSWORD=newpassword
+
+# Or invoke uv directly for the full --help output
+cd apps/api
+uv run python -m app.cli --help
+uv run python -m app.cli set-password --help
+```
+
+> The CLI reuses the same async DB session and bcrypt hashing as the API, so it works against any environment that has `DATABASE_URL` set in `apps/api/.env`.
 
 ## Adding a new API module
 
