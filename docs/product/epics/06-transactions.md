@@ -99,6 +99,21 @@ Extends `Transaction` (introduced in Epic 04):
 - Soft-delete / undo.
 - Export CSV.
 
+## Implementation status — ✅ Complete (2026-05-31)
+
+### What was built
+- **Migration** `a3f8c2b1d9e4` — enum rename (charge→expense, payment→income, credit→refund), nullable `statement_id`, new columns (`is_split`, `parent_transaction_id`, `is_deleted`, `deleted_at`), `transaction_audits` table, performance indexes.
+- **Backend** — full CRUD + split + bulk-update + soft-delete/restore + CSV export + audit trail. All endpoints require household scoping.
+- **Frontend** — `/secure/transactions` page with filter bar (search, date presets, advanced filters popover), sortable table, inline category edit, TransactionModal (edit + audit history), AddTransactionModal, SplitTransactionModal, BulkActionsBar, undo-delete banner.
+- **Sidebar** — "Transactions" nav link wired to `/secure/transactions`.
+- **Tests** — 23/23 Playwright scenarios pass; zero JS errors.
+
+### Implementation decisions
+- Full-text search uses `ilike` (not GIN) for MVP simplicity; upgrade path is `to_tsvector` index already created.
+- Split validation uses `Decimal.quantize(TWOPLACES)` to prevent float drift.
+- Deleted transactions use 7-day soft-delete with client-side undo banner; hard-delete background job deferred to V1.
+- `transaction_type` renamed: charge→expense, payment→income, credit→refund. AI pipeline prompt and fallback updated.
+
 ## Acceptance criteria
 
 - Filter, search, and sort on 5,000+ transactions returns in under 300 ms on a normal connection.

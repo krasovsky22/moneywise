@@ -119,11 +119,11 @@ SYSTEM_PROMPT = """You are a financial transaction parser. Extract structured tr
 Rules:
 - Normalize merchant names (e.g., "SQ *COFFEE BAR #1234" → "Coffee Bar")
 - Assign categories from the provided list only
-- Sign convention: negative amount = expense/charge, positive = credit/payment/refund
+- Sign convention: negative amount = expense/income, positive = income/refund
 - Skip: section headers, summary rows, balance rows, beginning/ending balance rows
 - For multi-cardholder statements: include all transactions regardless of cardholder
 - Date output must be ISO 8601 (YYYY-MM-DD)
-- transaction_type must be one of: charge, payment, credit, refund
+- transaction_type must be one of: expense, income, transfer, refund
 - confidence_per_field: object with keys date, amount, merchant, category — values 0.0 to 1.0
 
 Respond with valid JSON only."""
@@ -146,7 +146,7 @@ Respond with this exact JSON structure:
       "amount": -12.34,
       "merchant_clean": "Clean Name",
       "merchant_raw": "RAW DESCRIPTION AS SEEN",
-      "transaction_type": "charge|payment|credit|refund",
+      "transaction_type": "expense|income|transfer|refund",
       "category": "Category Name or null",
       "confidence_per_field": {{"date": 0.99, "amount": 0.99, "merchant": 0.85, "category": 0.80}},
       "notes": "optional note or null"
@@ -529,11 +529,11 @@ async def process_statement(statement_id: uuid.UUID) -> None:
                     except ValueError:
                         tx_date = statement.period_end or date.today()
 
-                    tx_type_str = str(tx_data.get("transaction_type", "charge"))
+                    tx_type_str = str(tx_data.get("transaction_type", "expense"))
                     try:
                         tx_type = TransactionType(tx_type_str)
                     except ValueError:
-                        tx_type = TransactionType.charge
+                        tx_type = TransactionType.expense
 
                     tx = Transaction(
                         statement_id=statement.id,
