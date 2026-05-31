@@ -6,10 +6,14 @@ import { CategoryPicker } from "./CategoryPicker";
 import { cn } from "@/lib/utils";
 import type { Transaction } from "./transactionsApi";
 import type { Category } from "@/features/categories/categoriesApi";
+import type { Card } from "@/features/cards/cardsApi";
+import type { BankAccount } from "@/features/bank-accounts/bankAccountsApi";
 
 interface TransactionTableRowProps {
   transaction: Transaction;
   categories: Category[];
+  cards: Card[];
+  bankAccounts: BankAccount[];
   selected: boolean;
   onSelect: (id: string, checked: boolean) => void;
   onEdit: (id: string) => void;
@@ -40,6 +44,8 @@ function formatCurrency(amount: string): string {
 export const TransactionTableRow = ({
   transaction,
   categories,
+  cards,
+  bankAccounts,
   selected,
   onSelect,
   onEdit,
@@ -49,6 +55,18 @@ export const TransactionTableRow = ({
   const amount = parseFloat(transaction.amount);
   const isExpense = amount < 0;
   const typeVariant = TYPE_VARIANT[transaction.transaction_type] ?? "secondary";
+
+  const sourceLabel = (() => {
+    if (transaction.card_id) {
+      const card = cards.find((c) => c.id === transaction.card_id);
+      if (card) return `${card.nickname}${card.last4 ? ` ••${card.last4}` : ""}`;
+    }
+    if (transaction.bank_account_id) {
+      const acct = bankAccounts.find((a) => a.id === transaction.bank_account_id);
+      if (acct) return `${acct.nickname}${acct.last4 ? ` ••${acct.last4}` : ""}`;
+    }
+    return null;
+  })();
 
   return (
     <tr
@@ -130,12 +148,18 @@ export const TransactionTableRow = ({
 
       {/* Source */}
       <td className="w-[90px] px-3 py-2">
-        <Badge
-          variant={transaction.source === "statement" ? "outline" : "secondary"}
-          className="text-[10px] capitalize"
-        >
-          {transaction.source}
-        </Badge>
+        {sourceLabel ? (
+          <span className="truncate text-xs text-muted-foreground" title={sourceLabel}>
+            {sourceLabel}
+          </span>
+        ) : (
+          <Badge
+            variant={transaction.source === "statement" ? "outline" : "secondary"}
+            className="text-[10px] capitalize"
+          >
+            {transaction.source}
+          </Badge>
+        )}
       </td>
 
       {/* Actions */}

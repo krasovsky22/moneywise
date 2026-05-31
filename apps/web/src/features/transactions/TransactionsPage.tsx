@@ -11,6 +11,8 @@ import { AddTransactionModal } from "./AddTransactionModal";
 import { useTransactionsGlobal, useUpdateTransaction, useDeleteTransaction, useBulkUpdate, useRestoreTransaction } from "./useTransactions";
 import { buildExportUrl } from "./transactionsApi";
 import { useCategories } from "@/features/categories/useCategories";
+import { useCards } from "@/features/cards/useCards";
+import { useBankAccounts } from "@/features/bank-accounts/useBankAccounts";
 import type { TransactionFilters, SoftDeleteResponse } from "./transactionsApi";
 
 const DEFAULT_FILTERS: TransactionFilters = {
@@ -99,6 +101,8 @@ export const TransactionsPage = () => {
 
   const { data, isLoading, isError } = useTransactionsGlobal(filters);
   const { data: categories = [] } = useCategories();
+  const { data: cards = [] } = useCards(true);
+  const { data: bankAccounts = [] } = useBankAccounts(true);
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
   const bulkUpdateMutation = useBulkUpdate();
@@ -296,6 +300,8 @@ export const TransactionsPage = () => {
                 key={tx.id}
                 transaction={tx}
                 categories={categories}
+                cards={cards}
+                bankAccounts={bankAccounts}
                 selected={selectedIds.has(tx.id)}
                 onSelect={handleSelect}
                 onEdit={setModalTxId}
