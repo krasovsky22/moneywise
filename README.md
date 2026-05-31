@@ -16,6 +16,7 @@ moneywise/
 ```
 
 **Data flow:**
+
 ```
 Browser → TanStack Query → api-client.ts → Vite proxy
 → FastAPI route → service → async SQLAlchemy → PostgreSQL
@@ -23,12 +24,12 @@ Browser → TanStack Query → api-client.ts → Vite proxy
 
 ## Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Node.js | 22+ | `nvm install 22` or [nodejs.org](https://nodejs.org) |
-| pnpm | 10+ | `corepack enable && corepack prepare pnpm@latest --activate` |
-| uv | latest | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Docker Desktop | latest | [docker.com](https://www.docker.com/products/docker-desktop/) |
+| Tool           | Version | Install                                                       |
+| -------------- | ------- | ------------------------------------------------------------- |
+| Node.js        | 22+     | `nvm install 22` or [nodejs.org](https://nodejs.org)          |
+| pnpm           | 10+     | `corepack enable && corepack prepare pnpm@latest --activate`  |
+| uv             | latest  | `curl -LsSf https://astral.sh/uv/install.sh \| sh`            |
+| Docker Desktop | latest  | [docker.com](https://www.docker.com/products/docker-desktop/) |
 
 > **WSL2 users:** Enable Docker Desktop's WSL2 integration in Settings → Resources → WSL Integration.
 
@@ -57,24 +58,26 @@ pnpm dev
 ```
 
 Visit:
+
 - **Frontend:** http://localhost:3000 — shows API health status
 - **API docs:** http://localhost:8000/docs — FastAPI OpenAPI UI
 - **API health:** http://localhost:8000/api/v1/health
 
 ## Common Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start API + web concurrently |
-| `pnpm test` | Run all tests (pytest + Vitest) |
-| `pnpm lint` | Lint all packages |
-| `pnpm typecheck` | TypeScript + mypy strict check |
-| `pnpm build` | Production build |
-| `make up` / `make down` | Start / stop Docker services |
-| `make migrate` | Apply pending DB migrations |
-| `make migration MSG="..."` | Create a new migration |
-| `make logs` | Tail Docker logs |
-| `make set-password EMAIL=...` | Set or reset a user's password |
+| Command                       | Description                     |
+| ----------------------------- | ------------------------------- |
+| `pnpm dev`                    | Start API + web concurrently    |
+| `pnpm test`                   | Run all tests (pytest + Vitest) |
+| `pnpm lint`                   | Lint all packages               |
+| `pnpm typecheck`              | TypeScript + mypy strict check  |
+| `pnpm build`                  | Production build                |
+| `make up` / `make down`       | Start / stop Docker services    |
+| `make migrate`                | Apply pending DB migrations     |
+| `make migration MSG="..."`    | Create a new migration          |
+| `make logs`                   | Tail Docker logs                |
+| `make set-password EMAIL=...` | Set or reset a user's password  |
+| `make reset-data EMAIL=...`   | Delete all statements & transactions for a user's household |
 
 ## Running Services Individually
 
@@ -95,6 +98,37 @@ pnpm --filter web dev
 uv run uvicorn app.main:app --reload --port 8000 > /tmp/api.log 2>&1 &
 pnpm --filter web dev > /tmp/web.log 2>&1 &
 ```
+
+## Technical Docs
+
+- [Statement upload & parsing pipeline](docs/technical/statement-processing.md) — how files go from upload to categorized transactions, with flow diagrams and code links
+
+## AI Parsing Configuration
+
+Statement files are parsed by an AI pipeline (Epic 04) that extracts transactions, normalizes merchant names, and assigns categories.
+
+**Provider:** OpenAI Chat Completions API  
+**Default model:** `gpt-5-mini` (fast, cheap, accurate for structured extraction)
+
+To enable AI parsing, set `OPENAI_API_KEY` in `apps/api/.env`:
+
+```bash
+OPENAI_API_KEY=sk-proj-...
+```
+
+Without a key the pipeline still runs — it parses pages and classifies them, but writes zero transactions (mock mode). This lets the app function end-to-end for development without incurring API costs.
+
+**Configurable env vars (all in `apps/api/.env`):**
+
+| Variable               | Default      | Description                                                |
+| ---------------------- | ------------ | ---------------------------------------------------------- |
+| `OPENAI_API_KEY`       | _(empty)_    | OpenAI API key — leave blank for mock mode                 |
+| `AI_MODEL`             | `gpt-5-mini` | Any OpenAI chat completion model ID                        |
+| `CONFIDENCE_THRESHOLD` | `0.7`        | Rows below this score flag the statement as `needs_review` |
+
+**Cost:** `gpt-4o-mini` runs at $0.15 / 1M input tokens + $0.60 / 1M output tokens. A typical 20-page credit card statement (≈100 transactions) costs well under $0.01 per parse. Exact cost is recorded in `Statement.ai_cost_cents` and visible via `GET /api/v1/statements/{id}`.
+
+**Switching models:** set `AI_MODEL` to any OpenAI model that supports `response_format: json_object` (e.g., `gpt-4o`, `gpt-4-turbo`). The pipeline uses JSON mode so structured output is guaranteed without prompt-engineering workarounds.
 
 ## Background / Worker Commands
 
@@ -121,10 +155,16 @@ make set-password EMAIL=user@example.com
 # Pass password directly (useful in CI/scripts)
 make set-password EMAIL=user@example.com PASSWORD=newpassword
 
+# Delete all statements and transactions for a user's household (prompts for confirmation)
+make reset-data EMAIL=user@example.com
+
+# Skip the confirmation prompt (useful in scripts)
+make reset-data EMAIL=user@example.com YES=1
+
 # Or invoke uv directly for the full --help output
 cd apps/api
 uv run python -m app.cli --help
-uv run python -m app.cli set-password --help
+uv run python -m app.cli reset-data --help
 ```
 
 > The CLI reuses the same async DB session and bcrypt hashing as the API, so it works against any environment that has `DATABASE_URL` set in `apps/api/.env`.
@@ -156,9 +196,11 @@ uv run python -m app.cli set-password --help
 This project ships three Claude Code sub-agents in `.claude/agents/`. Invoke them by name when delegating work inside Claude Code.
 
 ### `product-manager`
+
 **Role:** Feature coordinator — no code, only analysis and delegation.
 
 Workflow for any feature request:
+
 1. Audits the codebase to understand current state
 2. Defines acceptance criteria and identifies gaps
 3. Splits work into backend and frontend tracks
@@ -170,9 +212,11 @@ May write planning docs under `.planning/`. Never touches `apps/`.
 ---
 
 ### `api-backend`
+
 **Role:** Python FastAPI professional — owns everything in `apps/api/`.
 
 Responsibilities:
+
 - FastAPI routes, services, schemas, ORM models
 - Alembic migrations
 - Async SQLAlchemy sessions and dependency injection
@@ -183,9 +227,11 @@ Key constraints: all DB/route code is async; route handlers are thin (delegate t
 ---
 
 ### `web-frontend`
+
 **Role:** React UI developer — owns everything in `apps/web/`.
 
 Responsibilities:
+
 - TanStack Router file-based routes and layouts
 - Feature components and `use<Feature>.ts` hooks (TanStack Query)
 - Zustand stores for client state

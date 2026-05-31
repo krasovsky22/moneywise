@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.modules.household.models import InvitationStatus
+from app.modules.household.models import HouseholdMemberRole, InvitationStatus
 
 
 class HouseholdResponse(BaseModel):
@@ -20,6 +20,7 @@ class HouseholdMemberResponse(BaseModel):
     user_id: uuid.UUID
     email: str
     display_name: str | None
+    role: HouseholdMemberRole
     joined_at: datetime
 
     model_config = {"from_attributes": True}

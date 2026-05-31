@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { StatementStatusBadge } from "./StatementStatusBadge";
@@ -93,9 +94,26 @@ export const StatementCard = ({ statement, accountLabel }: StatementCardProps) =
         </div>
 
         {statement.status === "needs_review" && (
-          <div className="flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-400">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span>Action needed — review this statement</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>Action needed — review this statement</span>
+            </div>
+            <Button asChild variant="outline" size="sm" className="shrink-0 text-xs">
+              <Link to="/secure/statements/$statementId" params={{ statementId: statement.id }}>
+                Review →
+              </Link>
+            </Button>
+          </div>
+        )}
+
+        {statement.status === "ready" && (
+          <div className="flex justify-end">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link to="/secure/statements/$statementId" params={{ statementId: statement.id }}>
+                View →
+              </Link>
+            </Button>
           </div>
         )}
 

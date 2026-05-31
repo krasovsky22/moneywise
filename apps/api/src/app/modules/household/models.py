@@ -34,6 +34,11 @@ class Household(Base):
     )
 
 
+class HouseholdMemberRole(StrEnum):
+    head = "head"
+    member = "member"
+
+
 class HouseholdMember(Base):
     __tablename__ = "household_members"
 
@@ -45,6 +50,11 @@ class HouseholdMember(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
+    )
+    role: Mapped[HouseholdMemberRole] = mapped_column(
+        Enum(HouseholdMemberRole, name="householdmemberrole"),
+        nullable=False,
+        default=HouseholdMemberRole.member,
     )
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

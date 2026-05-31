@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # AI / OpenAI
+    OPENAI_API_KEY: str = ""
+    CONFIDENCE_THRESHOLD: float = 0.7
+    AI_MODEL: str = "gpt-4o-mini"
+
     # App metadata
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"

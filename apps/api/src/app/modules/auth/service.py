@@ -21,6 +21,8 @@ from app.modules.users.service import create_user, get_user_by_email
 
 
 async def register_user(db: AsyncSession, email: str, password: str) -> User:
+    from app.modules.categories.service import seed_categories
+    from app.modules.household.models import HouseholdMemberRole
     from app.modules.household.service import (
         add_member,
         create_household,
@@ -34,7 +36,8 @@ async def register_user(db: AsyncSession, email: str, password: str) -> User:
 
     email_prefix = email.split("@")[0].replace(".", " ").title()
     household = await create_household(db, f"{email_prefix}'s Household")
-    await add_member(db, household.id, user.id)
+    await add_member(db, household.id, user.id, role=HouseholdMemberRole.head)
+    await seed_categories(db, household.id)
 
     return user
 

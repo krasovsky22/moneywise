@@ -14,6 +14,7 @@ from app.common.exceptions import NotFoundError
 from app.modules.household.models import (
     Household,
     HouseholdMember,
+    HouseholdMemberRole,
     Invitation,
     InvitationStatus,
 )
@@ -28,9 +29,12 @@ async def create_household(db: AsyncSession, name: str) -> Household:
 
 
 async def add_member(
-    db: AsyncSession, household_id: uuid.UUID, user_id: uuid.UUID
+    db: AsyncSession,
+    household_id: uuid.UUID,
+    user_id: uuid.UUID,
+    role: HouseholdMemberRole = HouseholdMemberRole.member,
 ) -> HouseholdMember:
-    member = HouseholdMember(household_id=household_id, user_id=user_id)
+    member = HouseholdMember(household_id=household_id, user_id=user_id, role=role)
     db.add(member)
     await db.flush()
     return member
@@ -212,5 +216,9 @@ async def leave_household(db: AsyncSession, user_id: uuid.UUID) -> Household:
     user = user_result.scalar_one()
     email_prefix = user.email.split("@")[0].replace(".", " ").title()
     new_household = await create_household(db, f"{email_prefix}'s Household")
-    await add_member(db, new_household.id, user_id)
+    await add_member(db, new_household.id, user_id, role=HouseholdMemberRole.head)
+
+    from app.modules.categories.service import seed_categories
+
+    await seed_categories(db, new_household.id)
     return new_household

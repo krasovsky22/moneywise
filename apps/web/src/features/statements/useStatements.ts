@@ -82,6 +82,7 @@ export function useReprocessStatement() {
     mutationFn: (id: string) => reprocessStatement(id),
     onSuccess: (_result, id) => {
       void queryClient.invalidateQueries({ queryKey: statementKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: statementKeys.all });
     },
   });
 }

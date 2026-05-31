@@ -7,10 +7,9 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import aiofiles
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal
 from app.modules.statements.models import FailureReason, Statement, StatementStatus
 
 STORAGE_BASE = Path("data/statements")
@@ -117,10 +116,21 @@ async def delete_statement(
     session: AsyncSession,
     statement: Statement,
 ) -> None:
-    # When Epic 06 adds the transactions table with source_statement_id FK + CASCADE,
-    # linked transactions will be automatically deleted.
     await session.delete(statement)
     await session.flush()
+
+
+async def delete_statement_transactions(
+    session: AsyncSession,
+    statement_id: uuid.UUID,
+) -> int:
+    from app.modules.transactions.models import Transaction
+
+    result = await session.execute(
+        delete(Transaction).where(Transaction.statement_id == statement_id)
+    )
+    await session.flush()
+    return result.rowcount
 
 
 async def update_statement_status(
@@ -138,21 +148,8 @@ async def update_statement_status(
     return statement
 
 
-async def process_statement_stub(statement_id: uuid.UUID) -> None:
-    """Stub background processor — advances status to ready. Epic 04 replaces this."""
-    await asyncio.sleep(2)
-    async with AsyncSessionLocal() as session:
-        statement = await session.get(Statement, statement_id)
-        if statement is None:
-            return
-        statement.status = StatementStatus.parsing
-        await session.commit()
+async def process_statement(statement_id: uuid.UUID) -> None:
+    """Delegates to the AI pipeline in pipeline.py."""
+    from app.modules.statements.pipeline import process_statement as _pipeline
 
-    await asyncio.sleep(3)
-    async with AsyncSessionLocal() as session:
-        statement = await session.get(Statement, statement_id)
-        if statement is None:
-            return
-        statement.status = StatementStatus.ready
-        statement.processed_at = datetime.now(UTC)
-        await session.commit()
+    await _pipeline(statement_id)

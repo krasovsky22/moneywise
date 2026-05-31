@@ -1,4 +1,4 @@
-.PHONY: up down migrate seed logs install dev clean set-password
+.PHONY: up down migrate seed logs install dev clean set-password reset-data
 
 # Start infrastructure (postgres + redis)
 up:
@@ -20,6 +20,11 @@ migration:
 # Omit PASSWORD to be prompted securely (recommended — keeps it out of shell history)
 set-password:
 	cd apps/api && uv run python -m app.cli set-password $(EMAIL) $(if $(PASSWORD),--password "$(PASSWORD)",)
+
+# Delete all statements and transactions for a user's household (usage: make reset-data EMAIL=user@example.com)
+# Add YES=1 to skip the confirmation prompt
+reset-data:
+	cd apps/api && uv run python -m app.cli reset-data $(EMAIL) $(if $(YES),--yes,)
 
 # Placeholder for seed data
 seed:

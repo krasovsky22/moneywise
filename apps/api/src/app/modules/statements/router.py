@@ -30,10 +30,11 @@ from app.modules.statements.service import (
     compute_file_hash,
     create_statement,
     delete_statement,
+    delete_statement_transactions,
     find_duplicate,
     get_storage_path,
     list_statements,
-    process_statement_stub,
+    process_statement,
     save_file,
     update_statement_status,
 )
@@ -115,7 +116,7 @@ async def upload_statement(
     # Commit now so the background task and the frontend's refetch both see the record.
     # get_db will commit again on exit (no-op since already committed).
     await db.commit()
-    background_tasks.add_task(process_statement_stub, statement.id)
+    background_tasks.add_task(process_statement, statement.id)
     return StatementUploadResponse(
         duplicate=False,
         statement=StatementResponse.model_validate(statement),
@@ -167,12 +168,17 @@ async def reprocess_statement_route(
     statement: Statement = Depends(get_statement_or_404),
     db: AsyncSession = Depends(get_db),
 ) -> Statement:
-    if statement.status != StatementStatus.failed:
+    if statement.status in (
+        StatementStatus.queued,
+        StatementStatus.parsing,
+        StatementStatus.categorizing,
+    ):
         raise HTTPException(
             status_code=422,
-            detail="Only statements with status 'failed' can be reprocessed.",
+            detail="Statement is already being processed.",
         )
+    await delete_statement_transactions(db, statement.id)
     updated = await update_statement_status(db, statement, StatementStatus.queued)
     await db.commit()
-    background_tasks.add_task(process_statement_stub, updated.id)
+    background_tasks.add_task(process_statement, updated.id)
     return updated
