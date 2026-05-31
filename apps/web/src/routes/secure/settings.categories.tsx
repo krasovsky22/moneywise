@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronRight, Smile } from "lucide-react";
+import { Trash2, Plus, ChevronRight, Smile, Check, ChevronsUpDown } from "lucide-react";
 import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   useCategories,
   useCategoryRules,
@@ -60,6 +68,7 @@ function CategoriesCard() {
     "spending",
   );
   const [parentId, setParentId] = useState<string>("none");
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [icon, setIcon] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -197,20 +206,73 @@ function CategoriesCard() {
                 <label className="text-xs text-muted-foreground mb-1 block">
                   Parent (optional)
                 </label>
-                <Select value={parentId} onValueChange={setParentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Top-level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Top-level</SelectItem>
-                    {topLevel.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ` : ""}
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={parentPickerOpen} onOpenChange={setParentPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={parentPickerOpen}
+                      aria-label="Select parent category"
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {parentId === "none"
+                          ? "Top-level"
+                          : (() => {
+                              const found = topLevel.find((c) => c.id === parentId);
+                              return found
+                                ? `${found.icon ? found.icon + " " : ""}${found.name}`
+                                : "Top-level";
+                            })()}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search categories…" />
+                      <CommandList>
+                        <CommandEmpty>No category found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="Top-level"
+                            onSelect={() => {
+                              setParentId("none");
+                              setParentPickerOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                parentId === "none" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            Top-level
+                          </CommandItem>
+                          {topLevel.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={`${c.icon ? c.icon + " " : ""}${c.name}`}
+                              onSelect={() => {
+                                setParentId(c.id);
+                                setParentPickerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  parentId === c.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {c.icon ? `${c.icon} ` : ""}{c.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="flex gap-2 pt-1">
@@ -442,6 +504,7 @@ function RulesCard() {
   const [showForm, setShowForm] = useState(false);
   const [pattern, setPattern] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
 
   const allFlat = flattenCategories(categories ?? []);
 
@@ -515,19 +578,58 @@ function RulesCard() {
                 <label className="text-xs text-muted-foreground mb-1 block">
                   Category *
                 </label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allFlat.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ` : ""}
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={categoryPickerOpen} onOpenChange={setCategoryPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={categoryPickerOpen}
+                      aria-label="Select category"
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {categoryId
+                          ? (() => {
+                              const found = allFlat.find((c) => c.id === categoryId);
+                              return found
+                                ? `${found.icon ? found.icon + " " : ""}${found.name}`
+                                : "Select…";
+                            })()
+                          : "Select…"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search categories…" />
+                      <CommandList>
+                        <CommandEmpty>No category found.</CommandEmpty>
+                        <CommandGroup>
+                          {allFlat.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={`${c.icon ? c.icon + " " : ""}${c.name}`}
+                              onSelect={() => {
+                                setCategoryId(c.id);
+                                setCategoryPickerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  categoryId === c.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {c.icon ? `${c.icon} ` : ""}{c.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="flex gap-2 pt-1">

@@ -1,18 +1,22 @@
 import { useRef, useState } from "react";
-import { Paperclip, X, Loader2 } from "lucide-react";
+import { Paperclip, X, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useCards } from "@/features/cards/useCards";
 import { useBankAccounts } from "@/features/bank-accounts/useBankAccounts";
@@ -51,6 +55,7 @@ export const StatementUploader = ({ onSuccess }: StatementUploaderProps) => {
     existing_uploaded_at: string | null;
   } | null>(null);
 
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadStatement();
 
@@ -162,34 +167,84 @@ export const StatementUploader = ({ onSuccess }: StatementUploaderProps) => {
 
       {/* Account picker */}
       <div className="space-y-1.5">
-        <Label htmlFor="account-select">Account</Label>
-        <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-          <SelectTrigger id="account-select" aria-label="Select account">
-            <SelectValue placeholder="Select an account…" />
-          </SelectTrigger>
-          <SelectContent>
-            {activeCards.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Credit Cards</SelectLabel>
-                {activeCards.map((card) => (
-                  <SelectItem key={card.id} value={`card:${card.id}`}>
-                    {card.nickname}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-            {activeBankAccounts.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Bank Accounts</SelectLabel>
-                {activeBankAccounts.map((account) => (
-                  <SelectItem key={account.id} value={`bank:${account.id}`}>
-                    {account.nickname}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-          </SelectContent>
-        </Select>
+        <Label>Account</Label>
+        <Popover open={accountPickerOpen} onOpenChange={setAccountPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={accountPickerOpen}
+              aria-label="Select account"
+              className="w-full justify-between font-normal"
+            >
+              <span className="truncate">
+                {selectedAccount
+                  ? (() => {
+                      const cardMatch = activeCards.find((c) => `card:${c.id}` === selectedAccount);
+                      if (cardMatch) return cardMatch.nickname;
+                      const bankMatch = activeBankAccounts.find((a) => `bank:${a.id}` === selectedAccount);
+                      if (bankMatch) return bankMatch.nickname;
+                      return "Select an account…";
+                    })()
+                  : "Select an account…"}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search accounts…" />
+              <CommandList>
+                <CommandEmpty>No account found.</CommandEmpty>
+                {activeCards.length > 0 && (
+                  <CommandGroup heading="Credit Cards">
+                    {activeCards.map((card) => (
+                      <CommandItem
+                        key={card.id}
+                        value={card.nickname}
+                        onSelect={() => {
+                          setSelectedAccount(`card:${card.id}`);
+                          setAccountPickerOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedAccount === `card:${card.id}` ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {card.nickname}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                {activeBankAccounts.length > 0 && (
+                  <CommandGroup heading="Bank Accounts">
+                    {activeBankAccounts.map((account) => (
+                      <CommandItem
+                        key={account.id}
+                        value={account.nickname}
+                        onSelect={() => {
+                          setSelectedAccount(`bank:${account.id}`);
+                          setAccountPickerOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedAccount === `bank:${account.id}` ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {account.nickname}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Drop zone */}
