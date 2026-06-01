@@ -47,3 +47,4 @@ apps/api/data
 playwright-tests/screenshots/
 .playwright-mcp
 docs/product/epics/examples
+logs.txt

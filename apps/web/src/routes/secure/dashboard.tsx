@@ -679,17 +679,17 @@ function DashboardPage() {
         {/* Recent Activity */}
         <Card className="flex-[1] min-w-0 flex flex-col">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base font-semibold shrink-0">
                 Recent Activity
               </CardTitle>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-1.5 min-w-0">
                 {cards.length > 0 && (
                   <Select
                     value={selectedCardId}
                     onValueChange={handleCardChange}
                   >
-                    <SelectTrigger className="h-7 w-[140px] text-xs px-2">
+                    <SelectTrigger className="h-7 w-auto max-w-[130px] text-xs px-2">
                       <SelectValue placeholder="All cards" />
                     </SelectTrigger>
                     <SelectContent>
