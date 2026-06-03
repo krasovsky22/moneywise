@@ -17,17 +17,19 @@ from plaid.model.transactions_sync_request import TransactionsSyncRequest
 
 from app.core.config import settings
 
-_ENV_MAP = {
-    "sandbox": Environment.Sandbox,
-    "production": Environment.Production,
-}
 
-
-def _make_client() -> plaid_api.PlaidApi:
-    host = _ENV_MAP.get(settings.PLAID_ENV.lower(), Environment.Sandbox)
+def _make_client(is_sandbox: bool) -> plaid_api.PlaidApi:
+    if is_sandbox:
+        host = Environment.Sandbox
+        client_id = settings.PLAID_SANDBOX_CLIENT_ID
+        secret = settings.PLAID_SANDBOX_SECRET
+    else:
+        host = Environment.Production
+        client_id = settings.PLAID_PROD_CLIENT_ID
+        secret = settings.PLAID_PROD_SECRET
     configuration = Configuration(
         host=host,
-        api_key={"clientId": settings.PLAID_CLIENT_ID, "secret": settings.PLAID_SECRET},
+        api_key={"clientId": client_id, "secret": secret},
     )
     api_client = ApiClient(configuration)
     return plaid_api.PlaidApi(api_client)
@@ -37,8 +39,9 @@ def create_link_token(
     user_id: str,
     household_id: str,
     access_token: str | None = None,
+    is_sandbox: bool = True,
 ) -> str:
-    client = _make_client()
+    client = _make_client(is_sandbox)
     user = LinkTokenCreateRequestUser(client_user_id=user_id)
 
     if access_token is not None:
@@ -63,15 +66,17 @@ def create_link_token(
     return str(response["link_token"])
 
 
-def exchange_public_token(public_token: str) -> tuple[str, str]:
-    client = _make_client()
+def exchange_public_token(
+    public_token: str, is_sandbox: bool = True
+) -> tuple[str, str]:
+    client = _make_client(is_sandbox)
     request = ItemPublicTokenExchangeRequest(public_token=public_token)
     response = client.item_public_token_exchange(request)
     return str(response["access_token"]), str(response["item_id"])
 
 
-def get_accounts(access_token: str) -> list[dict]:
-    client = _make_client()
+def get_accounts(access_token: str, is_sandbox: bool = True) -> list[dict]:
+    client = _make_client(is_sandbox)
     request = AccountsGetRequest(access_token=access_token)
     response = client.accounts_get(request)
     accounts = response["accounts"]
@@ -95,8 +100,10 @@ def get_accounts(access_token: str) -> list[dict]:
     return result
 
 
-def sync_transactions(access_token: str, cursor: str | None) -> dict:
-    client = _make_client()
+def sync_transactions(
+    access_token: str, cursor: str | None, is_sandbox: bool = True
+) -> dict:
+    client = _make_client(is_sandbox)
     kwargs: dict = {"access_token": access_token}
     if cursor:
         kwargs["cursor"] = cursor
@@ -164,14 +171,14 @@ def sync_transactions(access_token: str, cursor: str | None) -> dict:
     }
 
 
-def remove_item(access_token: str) -> None:
-    client = _make_client()
+def remove_item(access_token: str, is_sandbox: bool = True) -> None:
+    client = _make_client(is_sandbox)
     request = ItemRemoveRequest(access_token=access_token)
     client.item_remove(request)
 
 
-def get_institution(institution_id: str) -> dict:
-    client = _make_client()
+def get_institution(institution_id: str, is_sandbox: bool = True) -> dict:
+    client = _make_client(is_sandbox)
     request = InstitutionsGetByIdRequest(
         institution_id=institution_id,
         country_codes=[CountryCode("US")],

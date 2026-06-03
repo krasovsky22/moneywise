@@ -25,6 +25,7 @@ from app.modules.household.service import (
     leave_household,
     revoke_invitation,
     update_household_name,
+    update_household_sandbox,
 )
 from app.modules.users.dependencies import get_current_user
 from app.modules.users.models import User
@@ -52,8 +53,11 @@ async def patch_household(
     household = await get_household_for_user(db, current_user.id)
     if household is None:
         raise NotFoundError("No household found for current user")
-    updated = await update_household_name(db, household, body.name)
-    return HouseholdResponse.model_validate(updated)
+    if body.name is not None:
+        household = await update_household_name(db, household, body.name)
+    if body.is_plaid_sandbox is not None:
+        household = await update_household_sandbox(db, household, body.is_plaid_sandbox)
+    return HouseholdResponse.model_validate(household)
 
 
 @router.get("/members", response_model=list[HouseholdMemberResponse])

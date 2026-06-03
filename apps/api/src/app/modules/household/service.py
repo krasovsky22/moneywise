@@ -70,6 +70,14 @@ async def update_household_name(
     return household
 
 
+async def update_household_sandbox(
+    db: AsyncSession, household: Household, is_plaid_sandbox: bool
+) -> Household:
+    household.is_plaid_sandbox = is_plaid_sandbox
+    await db.flush()
+    return household
+
+
 async def create_invitation(
     db: AsyncSession,
     household_id: uuid.UUID,

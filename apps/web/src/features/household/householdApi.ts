@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api-client";
 export interface Household {
   id: string;
   name: string;
+  is_plaid_sandbox: boolean;
   created_at: string;
 }
 
@@ -29,6 +30,12 @@ export async function getHousehold(): Promise<Household> {
 export async function updateHouseholdName(name: string): Promise<Household> {
   return apiClient
     .patch("api/v1/household", { json: { name } })
+    .json<Household>();
+}
+
+export async function updateHouseholdSandbox(isSandbox: boolean): Promise<Household> {
+  return apiClient
+    .patch("api/v1/household", { json: { is_plaid_sandbox: isSandbox } })
     .json<Household>();
 }
 

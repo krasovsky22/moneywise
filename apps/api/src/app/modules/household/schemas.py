@@ -11,6 +11,7 @@ from app.modules.household.models import HouseholdMemberRole, InvitationStatus
 class HouseholdResponse(BaseModel):
     id: uuid.UUID
     name: str
+    is_plaid_sandbox: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -27,7 +28,8 @@ class HouseholdMemberResponse(BaseModel):
 
 
 class UpdateHouseholdRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    name: str | None = Field(None, min_length=1, max_length=255)
+    is_plaid_sandbox: bool | None = None
 
 
 class InviteRequest(BaseModel):

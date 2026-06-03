@@ -32,9 +32,10 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gpt-4o-mini"
 
     # Plaid
-    PLAID_CLIENT_ID: str = ""
-    PLAID_SECRET: str = ""
-    PLAID_ENV: str = "sandbox"
+    PLAID_SANDBOX_CLIENT_ID: str = ""
+    PLAID_SANDBOX_SECRET: str = ""
+    PLAID_PROD_CLIENT_ID: str = ""
+    PLAID_PROD_SECRET: str = ""
     PLAID_TOKEN_ENCRYPTION_KEY: str = ""
 
     # App metadata

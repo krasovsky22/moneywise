@@ -9,9 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import NotFoundError
 from app.modules.bank_accounts.models import AccountType, BankAccount
+from app.modules.household.models import Household
 from app.modules.plaid import client as plaid_client
 from app.modules.plaid.crypto import decrypt_token, encrypt_token
 from app.modules.plaid.models import PlaidItem, PlaidItemStatus
+
+
+async def _household_sandbox_flag(db: AsyncSession, household_id: uuid.UUID) -> bool:
+    result = await db.execute(select(Household).where(Household.id == household_id))
+    hh = result.scalar_one_or_none()
+    return hh.is_plaid_sandbox if hh is not None else True
 
 
 async def create_link_token(
@@ -34,11 +41,13 @@ async def create_link_token(
             raise NotFoundError("Plaid item not found")
         access_token = decrypt_token(item.plaid_access_token)
 
+    is_sandbox = await _household_sandbox_flag(db, household_id)
     link_token = await asyncio.to_thread(
         plaid_client.create_link_token,
         str(user_id),
         str(household_id),
         access_token,
+        is_sandbox,
     )
     return link_token
 
@@ -51,12 +60,13 @@ async def exchange_and_provision(
     institution_id: str,
     institution_name: str,
 ) -> PlaidItem:
+    is_sandbox = await _household_sandbox_flag(db, household_id)
     raw_access_token, plaid_item_id = await asyncio.to_thread(
-        plaid_client.exchange_public_token, public_token
+        plaid_client.exchange_public_token, public_token, is_sandbox
     )
 
     institution_data = await asyncio.to_thread(
-        plaid_client.get_institution, institution_id
+        plaid_client.get_institution, institution_id, is_sandbox
     )
 
     encrypted_token = encrypt_token(raw_access_token)
@@ -75,7 +85,9 @@ async def exchange_and_provision(
     db.add(item)
     await db.flush()
 
-    raw_accounts = await asyncio.to_thread(plaid_client.get_accounts, raw_access_token)
+    raw_accounts = await asyncio.to_thread(
+        plaid_client.get_accounts, raw_access_token, is_sandbox
+    )
 
     for acct in raw_accounts:
         mask = acct.get("mask")
@@ -200,7 +212,8 @@ async def delete_item(
 ) -> None:
     item = await get_item(db, item_id, household_id)
     access_token = decrypt_token(item.plaid_access_token)
-    await asyncio.to_thread(plaid_client.remove_item, access_token)
+    is_sandbox = await _household_sandbox_flag(db, item.household_id)
+    await asyncio.to_thread(plaid_client.remove_item, access_token, is_sandbox)
     item.is_deleted = True
     item.updated_at = datetime.now(UTC)
     await db.flush()

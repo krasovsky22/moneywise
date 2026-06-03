@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bank_accounts.models import BankAccount
 from app.modules.categories.models import Category
+from app.modules.household.models import Household
 from app.modules.plaid import client as plaid_client
 from app.modules.plaid.crypto import decrypt_token
 from app.modules.plaid.models import (
@@ -99,6 +100,12 @@ async def sync_item(
     cursor_before = plaid_item.cursor
     cursor_after = cursor_before
 
+    household_result = await db.execute(
+        select(Household).where(Household.id == plaid_item.household_id)
+    )
+    _hh = household_result.scalar_one_or_none()
+    is_sandbox = _hh.is_plaid_sandbox if _hh is not None else True
+
     log = PlaidSyncLog(
         plaid_item_id=plaid_item.id,
         sync_type=sync_type,
@@ -118,7 +125,7 @@ async def sync_item(
 
         while has_more:
             page = await asyncio.to_thread(
-                plaid_client.sync_transactions, access_token, current_cursor
+                plaid_client.sync_transactions, access_token, current_cursor, is_sandbox
             )
 
             for tx in page["added"]:

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -29,6 +30,7 @@ import {
   getMembers,
   getInvitations,
   updateHouseholdName,
+  updateHouseholdSandbox,
   createInvitation,
   revokeInvitation,
   leaveHousehold,
@@ -248,6 +250,16 @@ function HouseholdCard({ currentUserId }: HouseholdCardProps) {
     },
   });
 
+  const sandboxMutation = useMutation({
+    mutationFn: (isSandbox: boolean) => updateHouseholdSandbox(isSandbox),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["household"] });
+    },
+    onError: () => {
+      toast.error("Failed to update Plaid mode.");
+    },
+  });
+
   function commitNameEdit() {
     const trimmed = nameValue.trim();
     if (!trimmed || trimmed === household?.name) {
@@ -371,6 +383,30 @@ function HouseholdCard({ currentUserId }: HouseholdCardProps) {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Plaid mode */}
+        <div className="space-y-1">
+          <p className="text-sm font-medium leading-none">Plaid Mode</p>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="plaid-sandbox"
+              checked={household?.is_plaid_sandbox ?? true}
+              onCheckedChange={(checked) => {
+                sandboxMutation.mutate(checked === true);
+              }}
+              disabled={householdLoading || sandboxMutation.isPending}
+            />
+            <label
+              htmlFor="plaid-sandbox"
+              className="text-sm text-muted-foreground cursor-pointer select-none"
+            >
+              Use sandbox credentials
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            When enabled, Plaid uses sandbox (test) credentials. Disable to use production credentials.
+          </p>
         </div>
 
         {/* Members list */}
