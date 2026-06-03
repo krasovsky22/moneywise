@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -21,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useCategories } from "@/features/categories/useCategories";
 import { useCards } from "@/features/cards/useCards";
+import { useBankAccounts } from "@/features/bank-accounts/useBankAccounts";
 import type { TransactionFilters, TransactionType } from "./transactionsApi";
 
 interface TransactionFiltersBarProps {
@@ -83,6 +90,7 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
 
   const { data: categories = [] } = useCategories();
   const { data: cards = [] } = useCards();
+  const { data: bankAccounts = [] } = useBankAccounts();
 
   useEffect(() => {
     setSearchValue(filters.q ?? "");
@@ -107,12 +115,12 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
     if (dates) onChange({ ...filters, ...dates, page: 1 });
   };
 
-  const handleTypeToggle = (type: TransactionType) => {
-    const current = filters.transaction_type ?? [];
-    const next = current.includes(type)
-      ? current.filter((t) => t !== type)
-      : [...current, type];
-    onChange({ ...filters, transaction_type: next.length ? next : undefined, page: 1 });
+  const handleTypeChange = (value: string) => {
+    if (value === "__all__") {
+      onChange({ ...filters, transaction_type: undefined, page: 1 });
+    } else {
+      onChange({ ...filters, transaction_type: [value as TransactionType], page: 1 });
+    }
   };
 
   const handleCardToggle = (cardId: string) => {
@@ -121,6 +129,14 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
       ? current.filter((id) => id !== cardId)
       : [...current, cardId];
     onChange({ ...filters, card_ids: next.length ? next : undefined, page: 1 });
+  };
+
+  const handleBankAccountToggle = (accountId: string) => {
+    const current = filters.bank_account_ids ?? [];
+    const next = current.includes(accountId)
+      ? current.filter((id) => id !== accountId)
+      : [...current, accountId];
+    onChange({ ...filters, bank_account_ids: next.length ? next : undefined, page: 1 });
   };
 
   const handleCategoryToggle = (catId: string) => {
@@ -152,11 +168,10 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
     filters.q,
     filters.date_from || filters.date_to,
     filters.card_ids?.length,
+    filters.bank_account_ids?.length,
     filters.category_ids?.length,
     filters.amount_min,
     filters.amount_max,
-    filters.is_user_confirmed !== undefined,
-    filters.source,
     filters.transaction_type?.length,
   ].filter(Boolean).length;
 
@@ -180,6 +195,9 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
     }
   }
   flatCategories.unshift({ id: "__uncategorized__", label: "Uncategorized" });
+
+  const selectedTypeValue =
+    filters.transaction_type?.length === 1 ? filters.transaction_type[0] : "__all__";
 
   return (
     <div className="space-y-2">
@@ -289,6 +307,89 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 space-y-4 p-4" align="end">
+            {/* Type */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Type
+              </p>
+              <Select value={selectedTypeValue} onValueChange={handleTypeChange}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__" className="text-xs">All types</SelectItem>
+                  {TRANSACTION_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value} className="text-xs">
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Bank Accounts */}
+            {bankAccounts.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Bank Account
+                </p>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className={cn(
+                        "flex h-8 w-full items-center justify-between rounded-md border bg-background px-3 text-xs ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                        filters.bank_account_ids?.length
+                          ? "border-primary text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate">
+                        {filters.bank_account_ids?.length
+                          ? filters.bank_account_ids.length === 1
+                            ? (bankAccounts.find((a) => a.id === filters.bank_account_ids![0])?.nickname ?? "1 selected")
+                            : `${filters.bank_account_ids.length} selected`
+                          : "All accounts"}
+                      </span>
+                      <ChevronDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-1" align="start">
+                    <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                      {bankAccounts.map((account) => (
+                        <button
+                          key={account.id}
+                          onClick={() => handleBankAccountToggle(account.id)}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent",
+                            filters.bank_account_ids?.includes(account.id) && "bg-accent",
+                          )}
+                        >
+                          <Checkbox
+                            checked={filters.bank_account_ids?.includes(account.id) ?? false}
+                            aria-hidden
+                            className="h-3.5 w-3.5 shrink-0"
+                          />
+                          <span className="truncate">
+                            {account.nickname}{account.last4 ? ` ••${account.last4}` : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {filters.bank_account_ids?.length ? (
+                      <div className="border-t pt-1 mt-1">
+                        <button
+                          onClick={() => onChange({ ...filters, bank_account_ids: undefined, page: 1 })}
+                          className="w-full rounded px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ) : null}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
             {/* Cards */}
             {cards.length > 0 && (
               <div className="space-y-2">
@@ -374,87 +475,6 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
               </div>
             </div>
 
-            {/* Status */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Status
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: "All", value: undefined as boolean | undefined },
-                  { label: "Confirmed", value: true },
-                  { label: "Needs review", value: false },
-                ].map((opt) => (
-                  <button
-                    key={String(opt.value)}
-                    onClick={() =>
-                      onChange({ ...filters, is_user_confirmed: opt.value, page: 1 })
-                    }
-                    className={cn(
-                      "rounded-full border px-3 py-0.5 text-xs transition-colors",
-                      filters.is_user_confirmed === opt.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "hover:border-primary/50",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Source */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Source
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: "All", value: undefined as string | undefined },
-                  { label: "Statement", value: "statement" },
-                  { label: "Manual", value: "manual" },
-                ].map((opt) => (
-                  <button
-                    key={String(opt.value)}
-                    onClick={() =>
-                      onChange({
-                        ...filters,
-                        source: opt.value as TransactionFilters["source"],
-                        page: 1,
-                      })
-                    }
-                    className={cn(
-                      "rounded-full border px-3 py-0.5 text-xs transition-colors",
-                      filters.source === opt.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "hover:border-primary/50",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Transaction type */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Type
-              </p>
-              <div className="space-y-1.5">
-                {TRANSACTION_TYPES.map((t) => (
-                  <Label key={t.value} className="flex cursor-pointer items-center gap-2">
-                    <Checkbox
-                      checked={filters.transaction_type?.includes(t.value) ?? false}
-                      onCheckedChange={() => handleTypeToggle(t.value)}
-                      id={`type-${t.value}`}
-                    />
-                    <span className="text-sm">{t.label}</span>
-                  </Label>
-                ))}
-              </div>
-            </div>
-
             {activeFilterCount > 0 && (
               <Button
                 variant="ghost"
@@ -517,25 +537,6 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
               </button>
             </Badge>
           )}
-          {filters.source && (
-            <Badge variant="secondary" className="gap-1 text-xs capitalize">
-              {filters.source}
-              <button onClick={() => removeFilter("source")} aria-label="Remove source filter">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {filters.is_user_confirmed !== undefined && (
-            <Badge variant="secondary" className="gap-1 text-xs">
-              {filters.is_user_confirmed ? "Confirmed" : "Needs review"}
-              <button
-                onClick={() => removeFilter("is_user_confirmed")}
-                aria-label="Remove status filter"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
           {filters.transaction_type?.map((t) => (
             <Badge key={t} variant="secondary" className="gap-1 text-xs capitalize">
               {t}
@@ -550,6 +551,23 @@ export const TransactionFiltersBar = ({ filters, onChange }: TransactionFiltersB
               </button>
             </Badge>
           ))}
+          {filters.bank_account_ids?.map((id) => {
+            const account = bankAccounts.find((a) => a.id === id);
+            return (
+              <Badge key={id} variant="secondary" className="gap-1 text-xs">
+                {account ? account.nickname : id}
+                <button
+                  onClick={() => {
+                    const next = filters.bank_account_ids?.filter((x) => x !== id);
+                    onChange({ ...filters, bank_account_ids: next?.length ? next : undefined, page: 1 });
+                  }}
+                  aria-label="Remove bank account filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            );
+          })}
           {filters.card_ids?.map((id) => {
             const card = cards.find((c) => c.id === id);
             return (

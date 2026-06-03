@@ -66,7 +66,7 @@ export const CategoryPicker = ({
           aria-expanded={open}
           aria-label="Select category"
           disabled={disabled}
-          className="h-8 min-w-[160px] justify-between text-xs font-normal"
+          className="h-9 w-full justify-between text-xs font-normal"
         >
           <span className="truncate">{selected ? selected.label : "Uncategorized"}</span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />

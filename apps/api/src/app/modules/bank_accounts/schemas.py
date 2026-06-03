@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -55,5 +56,14 @@ class BankAccountResponse(BaseModel):
     is_archived: bool
     created_at: datetime
     archived_at: datetime | None
+    plaid_account_id: str | None = None
+    plaid_item_id: uuid.UUID | None = None
+    official_name: str | None = None
+    subtype: str | None = None
+    current_balance: Decimal | None = None
+    available_balance: Decimal | None = None
+    credit_limit: Decimal | None = None
+    currency_code: str = "USD"
+    is_active: bool = True
 
     model_config = {"from_attributes": True}

@@ -6,11 +6,10 @@ from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.categories.service import upsert_rule
-from app.modules.statements.models import Statement, StatementStatus
 from app.modules.transactions.models import (
     ChangeKind,
     Transaction,
@@ -38,10 +37,6 @@ def _tx_to_dict(tx: Transaction) -> dict[str, Any]:
     }
 
 
-def _source(tx: Transaction) -> str:
-    return "manual" if tx.statement_id is None else "statement"
-
-
 async def _record_audit(
     session: AsyncSession,
     transaction_id: uuid.UUID,
@@ -60,28 +55,6 @@ async def _record_audit(
     session.add(audit)
 
 
-# ---------------------------------------------------------------------------
-# Existing helpers (kept for backwards compat)
-# ---------------------------------------------------------------------------
-
-
-async def list_transactions(
-    session: AsyncSession,
-    statement_id: uuid.UUID,
-    household_id: uuid.UUID,
-) -> list[Transaction]:
-    result = await session.execute(
-        select(Transaction)
-        .where(
-            Transaction.statement_id == statement_id,
-            Transaction.household_id == household_id,
-            Transaction.is_deleted.is_(False),
-        )
-        .order_by(Transaction.date, Transaction.created_at)
-    )
-    return list(result.scalars().all())
-
-
 async def get_transaction(
     session: AsyncSession,
     transaction_id: uuid.UUID,
@@ -96,37 +69,6 @@ async def get_transaction(
     return result.scalar_one_or_none()
 
 
-async def confirm_statement_transactions(
-    session: AsyncSession,
-    statement_id: uuid.UUID,
-    household_id: uuid.UUID,
-) -> int:
-    result = await session.execute(
-        update(Transaction)
-        .where(
-            Transaction.statement_id == statement_id,
-            Transaction.household_id == household_id,
-        )
-        .values(is_user_confirmed=True, updated_at=datetime.now(UTC))
-        .returning(Transaction.id)
-    )
-    confirmed_ids = result.fetchall()
-    count = len(confirmed_ids)
-
-    stmt_result = await session.execute(
-        select(Statement).where(
-            Statement.id == statement_id,
-            Statement.household_id == household_id,
-        )
-    )
-    statement = stmt_result.scalar_one_or_none()
-    if statement is not None:
-        statement.status = StatementStatus.ready
-
-    await session.flush()
-    return count
-
-
 async def bulk_insert_transactions(
     session: AsyncSession,
     transactions: list[dict[str, object]],
@@ -135,11 +77,6 @@ async def bulk_insert_transactions(
     session.add_all(objects)
     await session.flush()
     return objects
-
-
-# ---------------------------------------------------------------------------
-# New Epic 06 functions
-# ---------------------------------------------------------------------------
 
 
 async def list_transactions_global(
@@ -151,6 +88,7 @@ async def list_transactions_global(
     date_from: str | None = None,
     date_to: str | None = None,
     card_ids: list[uuid.UUID] | None = None,
+    bank_account_ids: list[uuid.UUID] | None = None,
     category_ids: list[str] | None = None,
     amount_min: Decimal | None = None,
     amount_max: Decimal | None = None,
@@ -185,6 +123,9 @@ async def list_transactions_global(
     if card_ids:
         stmt = stmt.where(Transaction.card_id.in_(card_ids))
 
+    if bank_account_ids:
+        stmt = stmt.where(Transaction.bank_account_id.in_(bank_account_ids))
+
     if category_ids:
         conditions = []
         plain_ids: list[uuid.UUID] = []
@@ -210,10 +151,8 @@ async def list_transactions_global(
     if is_user_confirmed is not None:
         stmt = stmt.where(Transaction.is_user_confirmed.is_(is_user_confirmed))
 
-    if source == "manual":
-        stmt = stmt.where(Transaction.statement_id.is_(None))
-    elif source == "statement":
-        stmt = stmt.where(Transaction.statement_id.isnot(None))
+    if source is not None:
+        stmt = stmt.where(Transaction.source == source)
 
     if transaction_types:
         stmt = stmt.where(Transaction.transaction_type.in_(transaction_types))
@@ -275,7 +214,6 @@ async def create_transaction(
     merchant_raw = data.merchant_raw or data.merchant_clean
     tx = Transaction(
         household_id=household_id,
-        statement_id=None,
         card_id=data.card_id,
         bank_account_id=data.bank_account_id,
         date=data.date,
@@ -287,6 +225,7 @@ async def create_transaction(
         notes=data.notes,
         is_user_confirmed=True,
         is_low_confidence=False,
+        source="manual",
     )
     session.add(tx)
     await session.flush()
@@ -382,7 +321,6 @@ async def split_transaction(
         )
         child = Transaction(
             household_id=transaction.household_id,
-            statement_id=transaction.statement_id,
             card_id=transaction.card_id,
             bank_account_id=transaction.bank_account_id,
             date=transaction.date,
@@ -395,6 +333,7 @@ async def split_transaction(
             is_user_confirmed=True,
             is_low_confidence=False,
             parent_transaction_id=transaction.id,
+            source=transaction.source,
         )
         session.add(child)
         children.append(child)
@@ -501,7 +440,3 @@ async def restore_transaction(
     )
     await session.flush()
     return transaction
-
-
-def _source_for(tx: Transaction) -> str:
-    return _source(tx)

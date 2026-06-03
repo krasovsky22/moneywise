@@ -24,20 +24,16 @@ from app.modules.transactions.schemas import (
     SoftDeleteResponse,
     SplitRequest,
     SplitResponse,
-    StatementConfirmResponse,
     TransactionCreate,
     TransactionDetailResponse,
     TransactionResponse,
     TransactionUpdate,
 )
 from app.modules.transactions.service import (
-    _source_for,
     bulk_update,
-    confirm_statement_transactions,
     create_transaction,
     get_transaction,
     get_transaction_detail,
-    list_transactions,
     list_transactions_global,
     restore_transaction,
     soft_delete,
@@ -51,71 +47,7 @@ router = APIRouter(tags=["transactions"])
 
 
 def _to_response(tx: Transaction) -> TransactionResponse:
-    data = {
-        "id": tx.id,
-        "statement_id": tx.statement_id,
-        "household_id": tx.household_id,
-        "card_id": tx.card_id,
-        "bank_account_id": tx.bank_account_id,
-        "date": tx.date,
-        "amount": tx.amount,
-        "merchant_clean": tx.merchant_clean,
-        "merchant_raw": tx.merchant_raw,
-        "transaction_type": tx.transaction_type,
-        "category_id": tx.category_id,
-        "confidence_date": tx.confidence_date,
-        "confidence_amount": tx.confidence_amount,
-        "confidence_merchant": tx.confidence_merchant,
-        "confidence_category": tx.confidence_category,
-        "is_user_confirmed": tx.is_user_confirmed,
-        "is_low_confidence": tx.is_low_confidence,
-        "notes": tx.notes,
-        "is_split": tx.is_split,
-        "parent_transaction_id": tx.parent_transaction_id,
-        "is_deleted": tx.is_deleted,
-        "deleted_at": tx.deleted_at,
-        "created_at": tx.created_at,
-        "updated_at": tx.updated_at,
-        "source": _source_for(tx),
-    }
-    return TransactionResponse.model_validate(data)
-
-
-# ---------------------------------------------------------------------------
-# Existing endpoints (backwards compat)
-# ---------------------------------------------------------------------------
-
-
-@router.get(
-    "/statements/{statement_id}/transactions",
-    response_model=list[TransactionResponse],
-)
-async def list_transactions_route(
-    statement_id: uuid.UUID,
-    household_id: uuid.UUID = Depends(get_household_id),
-    db: AsyncSession = Depends(get_db),
-) -> list[TransactionResponse]:
-    txs = await list_transactions(db, statement_id, household_id)
-    return [_to_response(tx) for tx in txs]
-
-
-@router.post(
-    "/statements/{statement_id}/confirm",
-    response_model=StatementConfirmResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def confirm_statement_route(
-    statement_id: uuid.UUID,
-    household_id: uuid.UUID = Depends(get_household_id),
-    db: AsyncSession = Depends(get_db),
-) -> StatementConfirmResponse:
-    count = await confirm_statement_transactions(db, statement_id, household_id)
-    return StatementConfirmResponse(confirmed_count=count)
-
-
-# ---------------------------------------------------------------------------
-# New endpoints
-# ---------------------------------------------------------------------------
+    return TransactionResponse.model_validate(tx)
 
 
 def _parse_list_param(value: list[str]) -> list[str]:
@@ -135,6 +67,7 @@ async def export_transactions_csv(
     date_from: Annotated[str | None, Query()] = None,
     date_to: Annotated[str | None, Query()] = None,
     card_ids: Annotated[list[str], Query()] = [],  # noqa: B006
+    bank_account_ids: Annotated[list[str], Query()] = [],  # noqa: B006
     category_ids: Annotated[list[str], Query()] = [],  # noqa: B006
     amount_min: Annotated[Decimal | None, Query()] = None,
     amount_max: Annotated[Decimal | None, Query()] = None,
@@ -147,6 +80,9 @@ async def export_transactions_csv(
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     parsed_card_ids = [uuid.UUID(x) for x in _parse_list_param(card_ids) if x]
+    parsed_bank_account_ids = [
+        uuid.UUID(x) for x in _parse_list_param(bank_account_ids) if x
+    ]
     parsed_cat_ids = _parse_list_param(category_ids)
     parsed_types = [
         TransactionType(t)
@@ -163,6 +99,7 @@ async def export_transactions_csv(
         date_from=date_from,
         date_to=date_to,
         card_ids=parsed_card_ids or None,
+        bank_account_ids=parsed_bank_account_ids or None,
         category_ids=parsed_cat_ids or None,
         amount_min=amount_min,
         amount_max=amount_max,
@@ -203,7 +140,7 @@ async def export_transactions_csv(
                     str(tx.amount),
                     str(tx.category_id) if tx.category_id else "",
                     tx.notes or "",
-                    _source_for(tx),
+                    tx.source,
                     tx.transaction_type,
                 ]
             )
@@ -231,6 +168,7 @@ async def list_transactions_global_route(
     date_from: Annotated[str | None, Query()] = None,
     date_to: Annotated[str | None, Query()] = None,
     card_ids: Annotated[list[str], Query()] = [],  # noqa: B006
+    bank_account_ids: Annotated[list[str], Query()] = [],  # noqa: B006
     category_ids: Annotated[list[str], Query()] = [],  # noqa: B006
     amount_min: Annotated[Decimal | None, Query()] = None,
     amount_max: Annotated[Decimal | None, Query()] = None,
@@ -244,6 +182,9 @@ async def list_transactions_global_route(
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedTransactions:
     parsed_card_ids = [uuid.UUID(x) for x in _parse_list_param(card_ids) if x]
+    parsed_bank_account_ids = [
+        uuid.UUID(x) for x in _parse_list_param(bank_account_ids) if x
+    ]
     parsed_cat_ids = _parse_list_param(category_ids)
     parsed_types = [
         TransactionType(t)
@@ -260,6 +201,7 @@ async def list_transactions_global_route(
         date_from=date_from,
         date_to=date_to,
         card_ids=parsed_card_ids or None,
+        bank_account_ids=parsed_bank_account_ids or None,
         category_ids=parsed_cat_ids or None,
         amount_min=amount_min,
         amount_max=amount_max,

@@ -3,12 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryPicker } from "./CategoryPicker";
+import { MerchantCell } from "./MerchantCell";
 import { cn } from "@/lib/utils";
 import type { Transaction } from "./transactionsApi";
 import type { Category } from "@/features/categories/categoriesApi";
 import type { Card } from "@/features/cards/cardsApi";
 import type { BankAccount } from "@/features/bank-accounts/bankAccountsApi";
-
 interface TransactionTableRowProps {
   transaction: Transaction;
   categories: Category[];
@@ -19,6 +19,7 @@ interface TransactionTableRowProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onCategoryChange: (id: string, categoryId: string) => void;
+  onSourceFilter?: (source: string) => void;
 }
 
 const TYPE_VARIANT: Record<
@@ -51,10 +52,16 @@ export const TransactionTableRow = ({
   onEdit,
   onDelete,
   onCategoryChange,
+  onSourceFilter,
 }: TransactionTableRowProps) => {
-  const amount = parseFloat(transaction.amount);
-  const isExpense = amount < 0;
   const typeVariant = TYPE_VARIANT[transaction.transaction_type] ?? "secondary";
+
+  const amountColor =
+    transaction.transaction_type === "expense"
+      ? "text-destructive"
+      : transaction.transaction_type === "income"
+        ? "text-green-600 dark:text-green-400"
+        : "";
 
   const sourceLabel = (() => {
     if (transaction.card_id) {
@@ -92,21 +99,38 @@ export const TransactionTableRow = ({
 
       {/* Merchant */}
       <td className="px-3 py-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {transaction.is_split && (
-            <GitBranch
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              aria-label="Split transaction"
-            />
-          )}
-          <span
-            className={cn(
-              "truncate text-sm font-medium",
-              transaction.is_deleted && "line-through text-muted-foreground",
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {transaction.is_split && (
+              <GitBranch
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-label="Split transaction"
+              />
             )}
+            <MerchantCell
+              merchantName={transaction.merchant_clean}
+              plaidMetadata={transaction.plaid_raw_metadata}
+              isDeleted={transaction.is_deleted}
+              isPending={transaction.pending}
+            />
+            {transaction.pending && (
+              <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+                Pending
+              </Badge>
+            )}
+          </div>
+          <button
+            onClick={() => onSourceFilter?.(transaction.source)}
+            className="shrink-0"
+            title={`Filter by source: ${transaction.source}`}
+            aria-label={`Filter by source ${transaction.source}`}
           >
-            {transaction.merchant_clean}
-          </span>
+            <Badge
+              className="text-[10px] capitalize cursor-pointer bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+            >
+              {sourceLabel ?? transaction.source}
+            </Badge>
+          </button>
         </div>
         {transaction.merchant_raw !== transaction.merchant_clean && (
           <p className="truncate text-[10px] text-muted-foreground/60">
@@ -118,12 +142,7 @@ export const TransactionTableRow = ({
       {/* Amount */}
       <td className="w-[110px] px-3 py-2 text-right">
         <span
-          className={cn(
-            "text-sm tabular-nums font-medium",
-            isExpense
-              ? "text-destructive"
-              : "text-green-600 dark:text-green-400",
-          )}
+          className={cn("text-sm tabular-nums font-medium", amountColor)}
         >
           {formatCurrency(transaction.amount)}
         </span>
@@ -144,22 +163,6 @@ export const TransactionTableRow = ({
           categories={categories}
           disabled={transaction.is_deleted}
         />
-      </td>
-
-      {/* Source */}
-      <td className="w-[90px] px-3 py-2">
-        {sourceLabel ? (
-          <span className="truncate text-xs text-muted-foreground" title={sourceLabel}>
-            {sourceLabel}
-          </span>
-        ) : (
-          <Badge
-            variant={transaction.source === "statement" ? "outline" : "secondary"}
-            className="text-[10px] capitalize"
-          >
-            {transaction.source}
-          </Badge>
-        )}
       </td>
 
       {/* Actions */}

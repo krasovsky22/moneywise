@@ -95,7 +95,7 @@ export const BankAccountsSettings = () => {
     });
   }
 
-  const visibleAccounts = accounts ?? [];
+  const visibleAccounts = (accounts ?? []).filter((a) => !a.plaid_account_id);
 
   return (
     <div className="space-y-4">
@@ -269,8 +269,8 @@ export const BankAccountsSettings = () => {
           <DialogHeader>
             <DialogTitle>Archive bank account?</DialogTitle>
             <DialogDescription>
-              Existing statements and transactions remain. The account stops
-              appearing in new uploads and dashboards.
+              Existing transactions remain. The account stops
+              appearing in dashboards.
             </DialogDescription>
           </DialogHeader>
           {dialog.type === "archive" && (

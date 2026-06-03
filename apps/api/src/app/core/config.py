@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     CONFIDENCE_THRESHOLD: float = 0.7
     AI_MODEL: str = "gpt-4o-mini"
 
+    # Plaid
+    PLAID_CLIENT_ID: str = ""
+    PLAID_SECRET: str = ""
+    PLAID_ENV: str = "sandbox"
+    PLAID_TOKEN_ENCRYPTION_KEY: str = ""
+
     # App metadata
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"

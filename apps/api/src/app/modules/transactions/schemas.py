@@ -12,7 +12,6 @@ from app.modules.transactions.models import TransactionType
 
 class TransactionResponse(BaseModel):
     id: uuid.UUID
-    statement_id: uuid.UUID | None
     household_id: uuid.UUID
     card_id: uuid.UUID | None
     bank_account_id: uuid.UUID | None
@@ -22,10 +21,6 @@ class TransactionResponse(BaseModel):
     merchant_raw: str
     transaction_type: TransactionType
     category_id: uuid.UUID | None
-    confidence_date: float | None
-    confidence_amount: float | None
-    confidence_merchant: float | None
-    confidence_category: float | None
     is_user_confirmed: bool
     is_low_confidence: bool
     notes: str | None
@@ -35,6 +30,9 @@ class TransactionResponse(BaseModel):
     deleted_at: dt.datetime | None
     created_at: dt.datetime
     updated_at: dt.datetime | None
+    plaid_transaction_id: str | None = None
+    plaid_raw_metadata: dict[str, Any] | None = None
+    pending: bool = False
     source: str
 
     model_config = {"from_attributes": True}

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CardsSettings } from "@/features/cards/CardsSettings";
 import { BankAccountsSettings } from "@/features/bank-accounts/BankAccountsSettings";
+import { ConnectedAccountsSection } from "@/features/plaid/ConnectedAccountsSection";
 
 export const Route = createFileRoute("/secure/wallet")({
   component: WalletPage,
@@ -13,6 +14,8 @@ function WalletPage() {
       <CardsSettings />
       <hr className="border-border" />
       <BankAccountsSettings />
+      <hr className="border-border" />
+      <ConnectedAccountsSection />
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "@tanstack/react-router";
-import { Loader2, GitBranch, ExternalLink } from "lucide-react";
+import { Loader2, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,29 +68,6 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-function ConfidenceBar({ label, value }: { label: string; value: number | null }) {
-  if (value === null) return null;
-  const pct = Math.round(value * 100);
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium tabular-nums">{pct}%</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${pct}%` }}
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${label} confidence: ${pct}%`}
-        />
-      </div>
-    </div>
-  );
-}
 
 export const TransactionModal = ({ transactionId, open, onClose }: TransactionModalProps) => {
   const { data: detail, isLoading, isError } = useTransactionDetail(transactionId);
@@ -294,39 +270,7 @@ export const TransactionModal = ({ transactionId, open, onClose }: TransactionMo
                       </Badge>
                     </div>
                   </div>
-                  {detail.statement_id && (
-                    <div className="space-y-0.5">
-                      <span className="text-muted-foreground">Statement</span>
-                      <div>
-                        <Link
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          to={`/secure/statements/${detail.statement_id}` as any}
-                          className="inline-flex items-center gap-1 text-primary hover:underline"
-                          onClick={onClose}
-                        >
-                          View statement
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      </div>
-                    </div>
-                  )}
                 </div>
-
-                {/* Confidence scores */}
-                {(detail.confidence_date !== null ||
-                  detail.confidence_amount !== null ||
-                  detail.confidence_merchant !== null ||
-                  detail.confidence_category !== null) && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">AI Confidence</p>
-                    <div className="space-y-2 rounded-md border p-3">
-                      <ConfidenceBar label="Date" value={detail.confidence_date} />
-                      <ConfidenceBar label="Amount" value={detail.confidence_amount} />
-                      <ConfidenceBar label="Merchant" value={detail.confidence_merchant} />
-                      <ConfidenceBar label="Category" value={detail.confidence_category} />
-                    </div>
-                  </div>
-                )}
 
                 {/* Split children */}
                 {detail.is_split && detail.children.length > 0 && (

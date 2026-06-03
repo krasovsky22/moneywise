@@ -21,7 +21,7 @@ migration:
 set-password:
 	cd apps/api && uv run python -m app.cli set-password $(EMAIL) $(if $(PASSWORD),--password "$(PASSWORD)",)
 
-# Delete all statements and transactions for a user's household (usage: make reset-data EMAIL=user@example.com)
+# Delete all transactions, statements, Plaid connections, bank accounts, and cards for a user's household (usage: make reset-data EMAIL=user@example.com)
 # Add YES=1 to skip the confirmation prompt
 reset-data:
 	cd apps/api && uv run python -m app.cli reset-data $(EMAIL) $(if $(YES),--yes,)

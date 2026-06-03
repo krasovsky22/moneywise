@@ -15,6 +15,7 @@ export interface BankAccount {
   is_archived: boolean;
   created_at: string;
   archived_at: string | null;
+  plaid_account_id: string | null;
 }
 
 export interface BankAccountCreate {

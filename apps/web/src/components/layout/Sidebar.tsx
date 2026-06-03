@@ -3,7 +3,6 @@ import { Link, useRouterState, useRouter } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Wallet,
-  Upload,
   ArrowLeftRight,
   Bitcoin,
   MessageSquare,
@@ -28,7 +27,6 @@ type NavItem = NavLeaf | NavGroup;
 const MENU_ITEMS: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", to: "/secure/dashboard" },
   { icon: Wallet, label: "My Wallet", to: "/secure/wallet" },
-  { icon: Upload, label: "Statements", to: "/secure/statements" },
   { icon: ArrowLeftRight, label: "Transactions", to: "/secure/transactions" },
   { icon: Bitcoin, label: "Cryptocurrency" },
   { icon: MessageSquare, label: "Messages", badge: 2 },

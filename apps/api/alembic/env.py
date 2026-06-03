@@ -20,7 +20,7 @@ from app.modules.bank_accounts import models as bank_accounts_models  # noqa: F4
 from app.modules.cards import models as cards_models  # noqa: F401
 from app.modules.categories import models as categories_models  # noqa: F401
 from app.modules.household import models as household_models  # noqa: F401
-from app.modules.statements import models as statements_models  # noqa: F401
+from app.modules.plaid import models as plaid_models  # noqa: F401
 from app.modules.transactions import models as transactions_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 

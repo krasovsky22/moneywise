@@ -3,11 +3,38 @@ import { apiClient } from "@/lib/api-client";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type TransactionType = "expense" | "income" | "transfer" | "refund";
-export type TransactionSource = "statement" | "manual";
+export type TransactionSource = "statement" | "manual" | "plaid";
+
+export interface PlaidCounterparty {
+  name: string;
+  type: string;
+  logo_url: string | null;
+  website: string | null;
+  entity_id: string | null;
+  confidence_level: string | null;
+}
+
+export interface PlaidPersonalFinanceCategory {
+  primary: string;
+  detailed: string;
+  confidence_level: string;
+}
+
+export interface PlaidRawMetadata {
+  name: string | null;
+  merchant_name: string | null;
+  logo_url: string | null;
+  merchant_entity_id: string | null;
+  website: string | null;
+  payment_channel: string | null;
+  counterparties: PlaidCounterparty[] | null;
+  personal_finance_category: PlaidPersonalFinanceCategory | null;
+  personal_finance_category_icon_url: string | null;
+  pending: boolean | null;
+}
 
 export interface Transaction {
   id: string;
-  statement_id: string | null;
   household_id: string;
   card_id: string | null;
   bank_account_id: string | null;
@@ -17,10 +44,6 @@ export interface Transaction {
   merchant_raw: string;
   transaction_type: TransactionType;
   category_id: string | null;
-  confidence_date: number | null;
-  confidence_amount: number | null;
-  confidence_merchant: number | null;
-  confidence_category: number | null;
   is_user_confirmed: boolean;
   is_low_confidence: boolean;
   notes: string | null;
@@ -29,6 +52,9 @@ export interface Transaction {
   is_deleted: boolean;
   deleted_at: string | null;
   source: TransactionSource;
+  pending?: boolean;
+  plaid_transaction_id?: string | null;
+  plaid_raw_metadata?: PlaidRawMetadata | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -63,6 +89,7 @@ export interface TransactionFilters {
   date_from?: string;
   date_to?: string;
   card_ids?: string[];
+  bank_account_ids?: string[];
   category_ids?: string[];
   amount_min?: string;
   amount_max?: string;
@@ -127,10 +154,6 @@ export interface SoftDeleteResponse {
   undo_until: string;
 }
 
-export interface StatementConfirmResponse {
-  confirmed_count: number;
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildSearchParams(filters: TransactionFilters): URLSearchParams {
@@ -151,6 +174,7 @@ function buildSearchParams(filters: TransactionFilters): URLSearchParams {
   if (filters.include_deleted) params.set("include_deleted", "true");
 
   filters.card_ids?.forEach((id) => params.append("card_ids", id));
+  filters.bank_account_ids?.forEach((id) => params.append("bank_account_ids", id));
   filters.category_ids?.forEach((id) => params.append("category_ids", id));
   filters.transaction_type?.forEach((t) => params.append("transaction_type", t));
 
@@ -215,16 +239,3 @@ export function buildExportUrl(
   return `${base}/api/v1/transactions/export${qs ? `?${qs}` : ""}`;
 }
 
-// ─── Backward-compat (used by StatementReview) ───────────────────────────────
-
-export async function listTransactions(statementId: string): Promise<Transaction[]> {
-  return apiClient
-    .get(`api/v1/statements/${statementId}/transactions`)
-    .json<Transaction[]>();
-}
-
-export async function confirmStatement(statementId: string): Promise<StatementConfirmResponse> {
-  return apiClient
-    .post(`api/v1/statements/${statementId}/confirm`)
-    .json<StatementConfirmResponse>();
-}

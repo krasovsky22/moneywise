@@ -260,8 +260,8 @@ export const CardsSettings = () => {
           <DialogHeader>
             <DialogTitle>Archive card?</DialogTitle>
             <DialogDescription>
-              Existing statements and transactions remain. The card stops
-              appearing in new uploads and dashboards.
+              Existing transactions remain. The card stops
+              appearing in dashboards.
             </DialogDescription>
           </DialogHeader>
           {dialog.type === "archive" && (

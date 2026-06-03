@@ -77,7 +77,7 @@ Visit:
 | `make migration MSG="..."`    | Create a new migration          |
 | `make logs`                   | Tail Docker logs                |
 | `make set-password EMAIL=...` | Set or reset a user's password  |
-| `make reset-data EMAIL=...`   | Delete all statements & transactions for a user's household |
+| `make reset-data EMAIL=...`   | Delete all transactions for a user's household               |
 
 ## Running Services Individually
 
@@ -99,50 +99,43 @@ uv run uvicorn app.main:app --reload --port 8000 > /tmp/api.log 2>&1 &
 pnpm --filter web dev > /tmp/web.log 2>&1 &
 ```
 
-## Technical Docs
+## Plaid Integration
 
-- [Statement upload & parsing pipeline](docs/technical/statement-processing.md) — how files go from upload to categorized transactions, with flow diagrams and code links
+MoneyWise integrates with [Plaid](https://plaid.com) to automatically sync transactions from banks and credit cards. Users connect an institution once via Plaid Link; the system maintains the connection and pulls new transactions incrementally using a cursor-based sync.
 
-## AI Parsing Configuration
+**Required env vars** (add to `apps/api/.env`):
 
-Statement files are parsed by an AI pipeline (Epic 04) that extracts transactions, normalizes merchant names, and assigns categories.
-
-**Provider:** OpenAI Chat Completions API  
-**Default model:** `gpt-5-mini` (fast, cheap, accurate for structured extraction)
-
-To enable AI parsing, set `OPENAI_API_KEY` in `apps/api/.env`:
+| Variable                    | Description                                                       |
+| --------------------------- | ----------------------------------------------------------------- |
+| `PLAID_CLIENT_ID`           | From [Plaid Dashboard](https://dashboard.plaid.com)               |
+| `PLAID_SECRET`              | Environment-specific secret from Plaid Dashboard                  |
+| `PLAID_ENV`                 | `sandbox` (dev) · `development` · `production`                    |
+| `PLAID_TOKEN_ENCRYPTION_KEY`| Fernet key — generate with the command below                      |
 
 ```bash
-OPENAI_API_KEY=sk-proj-...
+# Generate encryption key (run once, store in .env, never commit)
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Without a key the pipeline still runs — it parses pages and classifies them, but writes zero transactions (mock mode). This lets the app function end-to-end for development without incurring API costs.
+**Sandbox testing:** use `user_good` / `pass_good` — no real bank credentials required.
 
-**Configurable env vars (all in `apps/api/.env`):**
+**Architecture:** `apps/api/src/app/modules/plaid/` — `client.py` wraps the Plaid SDK, `crypto.py` encrypts access tokens at rest (Fernet/AES-256), `sync.py` runs cursor-based transaction sync, `router.py` exposes the HTTP endpoints.
 
-| Variable               | Default      | Description                                                |
-| ---------------------- | ------------ | ---------------------------------------------------------- |
-| `OPENAI_API_KEY`       | _(empty)_    | OpenAI API key — leave blank for mock mode                 |
-| `AI_MODEL`             | `gpt-5-mini` | Any OpenAI chat completion model ID                        |
-| `CONFIDENCE_THRESHOLD` | `0.7`        | Rows below this score flag the statement as `needs_review` |
+**Frontend:** `apps/web/src/features/plaid/` — `PlaidLinkButton` opens the Plaid modal, `ConnectedAccountsSection` on the Wallet page lists linked institutions with status badges, refresh, and disconnect actions.
 
-**Cost:** `gpt-4o-mini` runs at $0.15 / 1M input tokens + $0.60 / 1M output tokens. A typical 20-page credit card statement (≈100 transactions) costs well under $0.01 per parse. Exact cost is recorded in `Statement.ai_cost_cents` and visible via `GET /api/v1/statements/{id}`.
-
-**Switching models:** set `AI_MODEL` to any OpenAI model that supports `response_format: json_object` (e.g., `gpt-4o`, `gpt-4-turbo`). The pipeline uses JSON mode so structured output is guaranteed without prompt-engineering workarounds.
+**Background tasks:** initial sync after account connection runs via FastAPI `BackgroundTasks` (in-process, no separate worker needed).
 
 ## Background / Worker Commands
 
-FastAPI processes short background tasks (e.g. statement parsing) in-process via `BackgroundTasks`. No separate worker process is needed for MVP.
+All background processing (initial Plaid sync after connection) runs in-process via FastAPI `BackgroundTasks`. No separate worker is needed.
 
-When a real job queue is introduced (Epic 04+), the worker will be started alongside the API:
+When a job queue is added for scheduled sync (post-MVP), the worker will be started alongside the API:
 
 ```bash
-# Placeholder — not yet wired
+# Placeholder — not yet wired for scheduled cron sync
 cd apps/api
-uv run arq app.worker.WorkerSettings   # or: uv run rq worker
+uv run celery -A app.worker worker --beat
 ```
-
-Until then, all background processing runs automatically when the API server is up.
 
 ## Management CLI
 

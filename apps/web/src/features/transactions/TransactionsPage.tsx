@@ -187,6 +187,15 @@ export const TransactionsPage = () => {
     });
   };
 
+  const handleSourceFilter = (source: string) => {
+    setFilters((f) => ({
+      ...f,
+      source: f.source === source ? undefined : (source as TransactionFilters["source"]),
+      page: 1,
+    }));
+    setSelectedIds(new Set());
+  };
+
   const handleExport = () => {
     const { page: _page, page_size: _ps, ...exportFilters } = filters;
     const url = buildExportUrl(exportFilters);
@@ -265,9 +274,6 @@ export const TransactionsPage = () => {
               <th className="w-[180px] px-3 py-2.5 text-xs font-medium text-muted-foreground">
                 Category
               </th>
-              <th className="w-[90px] px-3 py-2.5 text-xs font-medium text-muted-foreground">
-                Source
-              </th>
               <th className="w-[80px] px-3 py-2.5 text-xs font-medium text-muted-foreground">
                 Actions
               </th>
@@ -276,21 +282,21 @@ export const TransactionsPage = () => {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="py-16 text-center">
+                <td colSpan={7} className="py-16 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                 </td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={8} className="py-16 text-center text-sm text-destructive">
+                <td colSpan={7} className="py-16 text-center text-sm text-destructive">
                   Failed to load transactions.
                 </td>
               </tr>
             )}
             {!isLoading && !isError && transactions.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">
+                <td colSpan={7} className="py-16 text-center text-sm text-muted-foreground">
                   No transactions found.
                 </td>
               </tr>
@@ -307,6 +313,7 @@ export const TransactionsPage = () => {
                 onEdit={setModalTxId}
                 onDelete={handleDelete}
                 onCategoryChange={handleCategoryChange}
+                onSourceFilter={handleSourceFilter}
               />
             ))}
           </tbody>

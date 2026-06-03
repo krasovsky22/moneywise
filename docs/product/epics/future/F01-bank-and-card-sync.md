@@ -126,7 +126,7 @@ Debugging and audit trail for sync runs.
 |---|---|
 | `id` | UUID PK |
 | `plaid_item_id` | FK → `plaid_items` |
-| `sync_type` | enum: `webhook` \| `cron` \| `manual` |
+| `sync_type` | enum: `cron` \| `manual` |
 | `cursor_before` | string? |
 | `cursor_after` | string? |
 | `added_count` | int |
@@ -212,21 +212,8 @@ write PlaidSyncLog row
 | `GET` | `/api/v1/plaid/items` | JWT | List all connected institutions for the household |
 | `DELETE` | `/api/v1/plaid/items/{id}` | JWT | Disconnect; calls Plaid `/item/remove`; soft-deletes Item |
 | `POST` | `/api/v1/plaid/items/{id}/sync` | JWT | Manual sync trigger; returns `{ queued: true }` |
-| `POST` | `/api/v1/plaid/webhook` | Plaid signature | Plaid → our server; routes events to background jobs |
 
-### Webhook handler
-
-Verifies `Plaid-Verification` header signature. Routes events:
-
-| Webhook event | Action |
-|---|---|
-| `SYNC_UPDATES_AVAILABLE` | Queue background sync for the Item |
-| `TRANSACTIONS_REMOVED` | Soft-delete the listed `plaid_transaction_id`s |
-| `ITEM_ERROR` | Set `PlaidItem.status = error`, store `error_code` |
-| `ITEM_LOGIN_REQUIRED` | Set `PlaidItem.status = login_required` |
-| `PENDING_EXPIRATION` | Set `PlaidItem.consent_expires_at`; surface warning to user |
-
-Returns `200 OK` immediately — background processing is async. Plaid retries on non-2xx.
+Webhook endpoint is explicitly excluded from MVP. See Phase 2.
 
 ---
 
@@ -302,51 +289,52 @@ PLAID_CLIENT_ID=
 PLAID_SECRET=
 PLAID_ENV=sandbox
 PLAID_TOKEN_ENCRYPTION_KEY=   # Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-PLAID_WEBHOOK_URL=            # publicly reachable URL for webhook delivery; use ngrok in local dev
+# PLAID_WEBHOOK_URL=          # deferred to Phase 2; requires a publicly reachable HTTPS URL (use ngrok in dev)
 ```
 
 ---
 
 ## Implementation Phases
 
-### Phase 1 — Core connection and sync (MVP)
+### Phase 1 — MVP ✅ Implemented
 
 **Backend:**
-- [ ] Add `plaid-python` and `cryptography` to `pyproject.toml`
-- [ ] Add env vars to `core/config.py` and `.env.example`
-- [ ] `modules/plaid/crypto.py` — Fernet encryption helpers
-- [ ] `modules/plaid/client.py` — Plaid SDK wrapper
-- [ ] `modules/plaid/models.py` — `PlaidItem`, `PlaidAccount`
-- [ ] Alembic migration: new tables + columns on `bank_accounts`, `cards`, `transactions`
-- [ ] `modules/plaid/service.py` — link token creation, token exchange, account provisioning
-- [ ] `modules/plaid/sync.py` — cursor sync with add/modify/remove handling, category mapping
-- [ ] `modules/plaid/router.py` — `POST /link/token`, `POST /items`, `GET /items`
-- [ ] Wire into `api/v1/router.py`
+- [x] Add `plaid-python` and `cryptography` to `pyproject.toml`
+- [x] Add env vars to `core/config.py` and `.env.example`
+- [x] `modules/plaid/crypto.py` — Fernet encryption helpers
+- [x] `modules/plaid/client.py` — Plaid SDK wrapper
+- [x] `modules/plaid/models.py` — `PlaidItem`, `PlaidAccount`, `PlaidSyncLog`
+- [x] Alembic migration: new tables + columns on `bank_accounts`, `cards`, `transactions`
+- [x] `modules/plaid/service.py` — link token creation, token exchange, account provisioning
+- [x] `modules/plaid/sync.py` — cursor sync with add/modify/remove handling, category mapping
+- [x] `modules/plaid/router.py` — `POST /link/token`, `POST /items`, `GET /items`, `DELETE /items/{id}`, `POST /items/{id}/sync`
+- [x] Wire into `api/v1/router.py`
+- [ ] Celery worker + Celery Beat configured (hourly cron sync) — deferred; initial sync uses FastAPI `BackgroundTasks`
 
 **Frontend:**
-- [ ] Install `@plaid/react`
-- [ ] `features/plaid/plaidApi.ts`
-- [ ] `features/plaid/PlaidLinkButton.tsx`
-- [ ] `features/plaid/ConnectedAccountsSection.tsx` + `PlaidItemCard.tsx`
-- [ ] Wallet page: add Connected Accounts section
-- [ ] Transaction filters: add `"plaid"` source option
+- [x] Install `@plaid/react`
+- [x] `features/plaid/plaidApi.ts`
+- [x] `features/plaid/PlaidLinkButton.tsx`
+- [x] `features/plaid/ConnectedAccountsSection.tsx` + `PlaidItemCard.tsx`
+- [x] `features/plaid/DisconnectDialog.tsx`
+- [x] Wallet page: add Connected Accounts section
+- [x] Transaction filters: bank-account filter + `source` filter (manual / plaid)
+- [x] Status badge (`good` / `login_required` / `error`), last synced time, Refresh and Disconnect buttons
+- [x] Reconnect flow (Plaid Link update mode) for `login_required` items
+- [ ] "login required" warning banner on Wallet page — deferred to Phase 2
+- [ ] Pending transaction visual indicator — deferred to Phase 2
 
-### Phase 2 — Webhooks, reconnect, status UI
+### Phase 2 — Webhooks & user notifications (post-MVP)
 
 **Backend:**
-- [ ] `POST /api/v1/plaid/webhook` with Plaid signature verification
-- [ ] `POST /api/v1/plaid/items/{id}/sync` manual trigger
-- [ ] `DELETE /api/v1/plaid/items/{id}` disconnect
-- [ ] `PlaidSyncLog` table and migration
-- [ ] `status` / `error_code` updates from webhook events
-- [ ] Cron fallback: scan all active items every 6 hours
+- [ ] `POST /api/v1/plaid/webhook` with `Plaid-Verification` signature check
+- [ ] Route `SYNC_UPDATES_AVAILABLE` → queue Celery sync task
+- [ ] Route `ITEM_ERROR` / `ITEM_LOGIN_REQUIRED` → update `PlaidItem.status`
+- [ ] Route `PENDING_EXPIRATION` → set `PlaidItem.consent_expires_at`
+- [ ] User notification dispatch after sync (email / push / in-app) when new transactions arrive
 
 **Frontend:**
-- [ ] Status badge on `PlaidItemCard` (`good` / `login_required` / `error`)
-- [ ] Reconnect flow (Plaid Link update mode)
-- [ ] "login required" warning banner on Wallet page
-- [ ] Disconnect confirmation dialog
-- [ ] Pending transaction visual indicator
+- [ ] In-app notification badge or toast when sync finds new transactions
 
 ### Phase 3 — Liabilities + Investments (future)
 
@@ -382,9 +370,7 @@ DELETE /api/v1/plaid/items/{id}
 POST /api/v1/plaid/items/{id}/sync
   Response: { queued: true }
 
-POST /api/v1/plaid/webhook   (called by Plaid, not the frontend)
-  Request:  Plaid webhook payload
-  Response: 200 OK
+# POST /api/v1/plaid/webhook — deferred to Phase 2
 ```
 
 ---
@@ -392,11 +378,10 @@ POST /api/v1/plaid/webhook   (called by Plaid, not the frontend)
 ## Acceptance Criteria
 
 - User links a major US bank; up to 24 months of transactions appear within 5 minutes of connection.
-- Subsequent syncs pull only deltas and never create duplicates (`plaid_transaction_id` unique constraint).
+- Subsequent hourly cron syncs pull only deltas and never create duplicates (`plaid_transaction_id` unique constraint).
 - Pending transactions appear with a visual indicator and are updated/removed when they post.
-- `ITEM_LOGIN_REQUIRED` webhook surfaces a reconnect banner to the user within one sync cycle.
+- Items with expired/invalid tokens surface a reconnect banner; user can re-authenticate via Plaid Link update mode.
 - Disconnecting stops future syncs and removes the access token; historical transactions are preserved.
-- Webhook endpoint verifies Plaid's signature and rejects invalid payloads.
 - All Plaid access tokens are encrypted at rest; none appear in logs or API responses.
 
 ---
@@ -407,7 +392,7 @@ POST /api/v1/plaid/webhook   (called by Plaid, not the frontend)
 |---|---|
 | **Access token leakage** | Fernet encryption at rest; never logged or returned from any endpoint; encryption key in env var only |
 | **Plaid environment confusion** | `PLAID_ENV` must be explicit; sandbox credentials are public (`user_good`/`pass_good`); dev/prod require Plaid account setup |
-| **Webhook delivery gaps** | Cron fallback every 6 hours; cursor ensures no double-processing regardless of how sync is triggered |
+| **Missed syncs** | Hourly cron is the sole trigger for MVP; cursor ensures no double-processing if a run is skipped |
 | **Pending tx sign-convention bugs** | Amount normalization tested in sandbox with known test transactions before prod |
 | **Duplicate transactions (Plaid + statement uploads)** | UI warning when `card.plaid_account_id` is set and user tries to upload; no auto-merge in V1 |
 | **Plaid cost at scale** | Usage-based pricing; forecast per-user cost before production launch; consider caching balance calls |

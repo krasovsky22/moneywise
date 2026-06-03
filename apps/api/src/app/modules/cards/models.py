@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -20,6 +30,10 @@ class CardNetwork(StrEnum):
 
 class Card(Base):
     __tablename__ = "cards"
+    __table_args__ = (
+        Index("ix_cards_household_id", "household_id"),
+        Index("idx_cards_plaid_account_id", "plaid_account_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
@@ -28,7 +42,6 @@ class Card(Base):
     household_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("households.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     nickname: Mapped[str] = mapped_column(String(100), nullable=False)
     issuer: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -42,6 +55,7 @@ class Card(Base):
     statement_close_day: Mapped[int] = mapped_column(Integer, nullable=False)
     payment_due_day: Mapped[int] = mapped_column(Integer, nullable=False)
     minimum_payment_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plaid_account_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

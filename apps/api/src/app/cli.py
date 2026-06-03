@@ -11,8 +11,10 @@ from sqlalchemy import delete, func, select
 
 from app.core.database import AsyncSessionLocal
 from app.core.security import get_password_hash
+from app.modules.bank_accounts.models import BankAccount
+from app.modules.cards.models import Card
 from app.modules.household.models import HouseholdMember
-from app.modules.statements.models import Statement
+from app.modules.plaid.models import PlaidItem
 from app.modules.transactions.models import Transaction
 from app.modules.users.models import User
 
@@ -70,7 +72,7 @@ def reset_data(
     email: str = typer.Argument(..., help="User email address"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
-    """Delete all statements and transactions for the user's household."""
+    """Delete all transactions, Plaid connections, bank accounts, and cards."""
     asyncio.run(_reset_data(email, yes))
 
 
@@ -95,24 +97,40 @@ async def _reset_data(email: str, confirmed: bool) -> None:
         txn_count = await session.scalar(
             select(func.count()).where(Transaction.household_id == household_id)
         )
-        stmt_count = await session.scalar(
-            select(func.count()).where(Statement.household_id == household_id)
+        plaid_count = await session.scalar(
+            select(func.count()).where(PlaidItem.household_id == household_id)
+        )
+        bank_count = await session.scalar(
+            select(func.count()).where(BankAccount.household_id == household_id)
+        )
+        card_count = await session.scalar(
+            select(func.count()).where(Card.household_id == household_id)
         )
 
         typer.echo(
-            f"Household {household_id}: {stmt_count} statement(s), "
-            f"{txn_count} transaction(s) will be deleted."
+            f"Household {household_id}:\n"
+            f"  {txn_count} transaction(s)\n"
+            f"  {plaid_count} Plaid connection(s) (+ linked accounts/sync logs)\n"
+            f"  {bank_count} bank account(s)\n"
+            f"  {card_count} card(s)\n"
+            f"will be deleted."
         )
 
         if not confirmed:
             typer.confirm("Proceed?", abort=True)
 
+        # Delete in FK-safe order: transactions → plaid items
+        # (cascades to plaid_sync_log) → bank accounts → cards
         await session.execute(
             delete(Transaction).where(Transaction.household_id == household_id)
         )
         await session.execute(
-            delete(Statement).where(Statement.household_id == household_id)
+            delete(PlaidItem).where(PlaidItem.household_id == household_id)
         )
+        await session.execute(
+            delete(BankAccount).where(BankAccount.household_id == household_id)
+        )
+        await session.execute(delete(Card).where(Card.household_id == household_id))
         await session.commit()
 
     typer.echo("Done.")

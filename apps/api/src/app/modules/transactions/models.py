@@ -66,13 +66,16 @@ class Transaction(Base):
             ),
             postgresql_using="gin",
         ),
+        Index(
+            "idx_transactions_plaid_transaction_id",
+            "plaid_transaction_id",
+            unique=True,
+            postgresql_where=text("plaid_transaction_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, server_default=text("gen_random_uuid()")
-    )
-    statement_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("statements.id", ondelete="CASCADE"), nullable=True, index=True
     )
     household_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("households.id", ondelete="CASCADE"), nullable=False, index=True
@@ -93,10 +96,6 @@ class Transaction(Base):
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
     )
-    confidence_date: Mapped[float | None] = mapped_column(nullable=True)
-    confidence_amount: Mapped[float | None] = mapped_column(nullable=True)
-    confidence_merchant: Mapped[float | None] = mapped_column(nullable=True)
-    confidence_category: Mapped[float | None] = mapped_column(nullable=True)
     is_user_confirmed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
@@ -111,6 +110,14 @@ class Transaction(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    plaid_transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    plaid_raw_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    pending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="statement"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.exceptions import NotFoundError
 from app.core.database import get_db
 from app.modules.household.service import get_household_for_user
-from app.modules.statements.models import Statement
-from app.modules.statements.service import get_statement
+from app.modules.plaid.models import PlaidItem
+from app.modules.plaid.service import get_item
 from app.modules.users.dependencies import get_current_user
 from app.modules.users.models import User
 
@@ -24,12 +24,9 @@ async def get_household_id(
     return household.id
 
 
-async def get_statement_or_404(
-    statement_id: uuid.UUID,
+async def get_current_plaid_item(
+    id: uuid.UUID,
     household_id: uuid.UUID = Depends(get_household_id),
     db: AsyncSession = Depends(get_db),
-) -> Statement:
-    statement = await get_statement(db, statement_id, household_id)
-    if statement is None:
-        raise NotFoundError("Statement not found")
-    return statement
+) -> PlaidItem:
+    return await get_item(db, id, household_id)
