@@ -118,14 +118,16 @@ def sync_transactions(access_token: str, cursor: str | None) -> dict:
 
         counterparties = []
         for cp in tx.get("counterparties") or []:
-            counterparties.append({
-                "name": cp.get("name"),
-                "type": str(cp.get("type", "")),
-                "logo_url": cp.get("logo_url"),
-                "website": cp.get("website"),
-                "entity_id": cp.get("entity_id"),
-                "confidence_level": str(cp.get("confidence_level", "")),
-            })
+            counterparties.append(
+                {
+                    "name": cp.get("name"),
+                    "type": str(cp.get("type", "")),
+                    "logo_url": cp.get("logo_url"),
+                    "website": cp.get("website"),
+                    "entity_id": cp.get("entity_id"),
+                    "confidence_level": str(cp.get("confidence_level", "")),
+                }
+            )
 
         return {
             "transaction_id": tx.get("transaction_id", ""),
