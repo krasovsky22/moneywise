@@ -13,6 +13,7 @@ from app.modules.bank_accounts.models import AccountType, BankAccount
 from app.modules.categories.models import Category, CategoryRule
 from app.modules.plaid.models import PlaidItem, PlaidItemStatus
 from app.modules.plaid.sync import sync_item
+from app.modules.subscriptions.models import Subscription
 from app.modules.transactions.models import Transaction, TransactionType
 
 _REGISTER_URL = "/api/v1/auth/register"
@@ -245,6 +246,29 @@ async def test_sync_soft_deletes_removed(
     tx = await _get_tx(db_session, "tx-5")
     assert tx.is_deleted is True
     assert tx.deleted_at is not None
+
+
+async def test_sync_triggers_subscription_detection(
+    db_client: AsyncClient, db_session: AsyncSession, plaid_pages: list[Any]
+) -> None:
+    household_id, item = await _provision(db_client, db_session)
+    plaid_pages.append(
+        _page(
+            added=[
+                _plaid_tx("tx-7", 15.99, "Netflix", date="2026-04-12"),
+                _plaid_tx("tx-8", 15.99, "Netflix", date="2026-05-12"),
+            ]
+        )
+    )
+    await sync_item(db_session, item)
+
+    result = await db_session.execute(
+        select(Subscription).where(Subscription.household_id == household_id)
+    )
+    subs = result.scalars().all()
+    assert len(subs) == 1
+    assert subs[0].merchant_clean == "Netflix"
+    assert subs[0].status.value == "pending_review"
 
 
 async def test_sync_failure_sets_error_and_keeps_cursor(

@@ -21,6 +21,7 @@ from app.modules.cards import models as cards_models  # noqa: F401
 from app.modules.categories import models as categories_models  # noqa: F401
 from app.modules.household import models as household_models  # noqa: F401
 from app.modules.plaid import models as plaid_models  # noqa: F401
+from app.modules.subscriptions import models as subscriptions_models  # noqa: F401
 from app.modules.transactions import models as transactions_models  # noqa: F401
 from app.modules.users import models as users_models  # noqa: F401
 

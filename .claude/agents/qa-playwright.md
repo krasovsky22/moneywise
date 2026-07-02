@@ -96,20 +96,23 @@ If you land on a login page or are redirected, check whether a test account exis
 
 ### Test credentials & authenticating in feature tests
 
-Use a **single static QA account** for all feature tests that need an authenticated session. Do NOT sign up a new user per test — it slows the suite, pollutes the database, and makes failures harder to reproduce.
+**ALWAYS use this single static QA agent account for every authenticated flow. Never sign up a new user per test, and never use any other email.** It slows the suite, pollutes the database, and makes failures harder to reproduce. This account is reserved for AI agents only; full details and maintenance commands are in [docs/testing/qa-agent-account.md](../../docs/testing/qa-agent-account.md).
 
-**Static QA credentials:**
+**Static QA credentials (local dev only):**
 
-- **Email**: `qa@moneywise.test`
-- **Password**: `TestPass123!`
+- **Email**: `qa-agent@moneywise.dev`
+- **Password**: `QaAgent!Sandbox2026`
+- **Household**: always Plaid Sandbox mode — never toggle this off
 
-**One-time setup**: if the account does not yet exist in the local dev database, create it once via `/signup` (manually or with a small bootstrap script). After that, every feature spec logs in with these credentials.
+(Do not use `.test`/`.example` domains — the backend's `EmailStr` validation rejects reserved TLDs, so such accounts cannot be registered.)
+
+**No setup needed**: this account is seeded automatically by an Alembic migration (`e4a18b2f9af0_seed_qa_agent_account.py`) every time `alembic upgrade head` / `make migrate` runs, and is self-healing — the migration re-asserts the password and sandbox flag on every run. If any environment has run migrations, the account is ready. If login fails, that means migrations haven't run or something is broken — it is never a reason to create a different account.
 
 **Pattern for feature specs** — log in once per test (or once per file via `storageState`) and proceed:
 
 ```ts
-const QA_EMAIL = "qa@moneywise.test";
-const QA_PASSWORD = "TestPass123!";
+const QA_EMAIL = "qa-agent@moneywise.dev";
+const QA_PASSWORD = "QaAgent!Sandbox2026";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("http://localhost:3000/login");

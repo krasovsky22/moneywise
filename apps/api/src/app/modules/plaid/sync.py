@@ -193,6 +193,21 @@ async def sync_item(
             modified=total_modified,
             removed=total_removed,
         )
+        if total_added or total_modified:
+            # Refresh subscription proposals from the new data; a detection
+            # failure must never fail the sync itself.
+            try:
+                from app.modules.subscriptions.detection import detect_subscriptions
+
+                await detect_subscriptions(db, plaid_item.household_id)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.exception(
+                    "subscription_detection_after_sync_failed",
+                    plaid_item_id=str(plaid_item.id),
+                    household_id=str(plaid_item.household_id),
+                )
 
     return log
 

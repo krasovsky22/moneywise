@@ -9,6 +9,7 @@ from app.modules.cards.router import router as cards_router
 from app.modules.categories.router import router as categories_router
 from app.modules.household.router import router as household_router
 from app.modules.plaid.router import router as plaid_router
+from app.modules.subscriptions.router import router as subscriptions_router
 from app.modules.transactions.router import router as transactions_router
 from app.modules.users.router import router as users_router
 
@@ -22,3 +23,4 @@ api_v1_router.include_router(bank_accounts_router)
 api_v1_router.include_router(categories_router)
 api_v1_router.include_router(transactions_router)
 api_v1_router.include_router(plaid_router)
+api_v1_router.include_router(subscriptions_router)

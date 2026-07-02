@@ -8,6 +8,8 @@ MoneyWise — a household personal-finance app. Users connect banks via Plaid, t
 
 Note: the original PDF-statement-upload pipeline was replaced by Plaid bank sync (Epic F01); its code, tests, and docs have been removed. Epics 03/04 in `docs/product/epics/` are historical.
 
+Design review notes and suggested UI updates: `docs/design/design-suggestions.md`. Dedicated QA agent account (for Playwright specs and the `qa-playwright` sub-agent — AI agents only, never for humans): `docs/testing/qa-agent-account.md`.
+
 ## Commands
 
 ### Root (pnpm workspaces + Turborepo)
