@@ -16,11 +16,7 @@ dependencies = [
     "httpx>=0.28",
     "structlog>=24.4",
     "bcrypt<4.0",
-    "python-multipart>=0.0.9",
-    "aiofiles>=24.0",
     "typer>=0.12",
-    "pdfplumber>=0.11",
-    "openai>=1.0",
     "plaid-python>=26.0",
     "cryptography>=42.0",
 ]
@@ -34,7 +30,6 @@ dev = [
     "mypy>=1.14",
     "types-passlib",
     "types-python-jose",
-    "types-aiofiles",
 ]
 
 [build-system]
@@ -57,9 +52,6 @@ select = ["E", "F", "I", "UP", "B", "SIM", "W"]
 # B008: FastAPI uses Depends() in default args intentionally
 ignore = ["B008"]
 
-[tool.ruff.lint.per-file-ignores]
-"src/app/modules/statements/pipeline.py" = ["E501"]
-
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
@@ -75,7 +67,7 @@ module = ["jose.*", "passlib.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["pdfplumber.*", "openai.*"]
+module = ["plaid", "plaid.*"]
 ignore_missing_imports = true
 
 # pytest

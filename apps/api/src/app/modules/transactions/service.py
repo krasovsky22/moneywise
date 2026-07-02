@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.categories.service import upsert_rule
@@ -79,11 +79,8 @@ async def bulk_insert_transactions(
     return objects
 
 
-async def list_transactions_global(
-    session: AsyncSession,
+def build_transactions_query(
     household_id: uuid.UUID,
-    page: int = 1,
-    page_size: int = 50,
     q: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -95,10 +92,8 @@ async def list_transactions_global(
     is_user_confirmed: bool | None = None,
     source: str | None = None,
     transaction_types: list[TransactionType] | None = None,
-    sort_by: str = "date",
-    sort_order: str = "desc",
     include_deleted: bool = False,
-) -> tuple[list[Transaction], int]:
+) -> Select[tuple[Transaction]]:
     stmt = select(Transaction).where(Transaction.household_id == household_id)
 
     if not include_deleted:
@@ -111,14 +106,10 @@ async def list_transactions_global(
         )
 
     if date_from:
-        from datetime import date as _date
-
-        stmt = stmt.where(Transaction.date >= _date.fromisoformat(date_from))
+        stmt = stmt.where(Transaction.date >= date.fromisoformat(date_from))
 
     if date_to:
-        from datetime import date as _date
-
-        stmt = stmt.where(Transaction.date <= _date.fromisoformat(date_to))
+        stmt = stmt.where(Transaction.date <= date.fromisoformat(date_to))
 
     if card_ids:
         stmt = stmt.where(Transaction.card_id.in_(card_ids))
@@ -157,10 +148,14 @@ async def list_transactions_global(
     if transaction_types:
         stmt = stmt.where(Transaction.transaction_type.in_(transaction_types))
 
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total_result = await session.execute(count_stmt)
-    total = total_result.scalar_one()
+    return stmt
 
+
+def apply_sort(
+    stmt: Select[tuple[Transaction]],
+    sort_by: str = "date",
+    sort_order: str = "desc",
+) -> Select[tuple[Transaction]]:
     sort_col = {
         "date": Transaction.date,
         "amount": Transaction.amount,
@@ -169,9 +164,51 @@ async def list_transactions_global(
     }.get(sort_by, Transaction.date)
 
     if sort_order == "asc":
-        stmt = stmt.order_by(sort_col.asc())
-    else:
-        stmt = stmt.order_by(sort_col.desc())
+        return stmt.order_by(sort_col.asc())
+    return stmt.order_by(sort_col.desc())
+
+
+async def list_transactions_global(
+    session: AsyncSession,
+    household_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+    q: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    card_ids: list[uuid.UUID] | None = None,
+    bank_account_ids: list[uuid.UUID] | None = None,
+    category_ids: list[str] | None = None,
+    amount_min: Decimal | None = None,
+    amount_max: Decimal | None = None,
+    is_user_confirmed: bool | None = None,
+    source: str | None = None,
+    transaction_types: list[TransactionType] | None = None,
+    sort_by: str = "date",
+    sort_order: str = "desc",
+    include_deleted: bool = False,
+) -> tuple[list[Transaction], int]:
+    stmt = build_transactions_query(
+        household_id,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+        card_ids=card_ids,
+        bank_account_ids=bank_account_ids,
+        category_ids=category_ids,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        is_user_confirmed=is_user_confirmed,
+        source=source,
+        transaction_types=transaction_types,
+        include_deleted=include_deleted,
+    )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total_result = await session.execute(count_stmt)
+    total = total_result.scalar_one()
+
+    stmt = apply_sort(stmt, sort_by, sort_order)
 
     offset = (page - 1) * page_size
     stmt = stmt.offset(offset).limit(page_size)
@@ -179,6 +216,44 @@ async def list_transactions_global(
     result = await session.execute(stmt)
     items = list(result.scalars().all())
     return items, total
+
+
+async def summarize_by_month(
+    session: AsyncSession,
+    household_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+) -> dict[tuple[str, TransactionType], tuple[Decimal, int]]:
+    """Aggregate non-deleted transactions by calendar month and type.
+
+    Split parents are excluded — their children carry the amounts, so
+    counting both would double the totals.
+    """
+    month_col = func.to_char(Transaction.date, "YYYY-MM").label("month")
+    stmt = (
+        select(
+            month_col,
+            Transaction.transaction_type,
+            func.sum(func.abs(Transaction.amount)).label("total"),
+            func.count().label("tx_count"),
+        )
+        .where(
+            Transaction.household_id == household_id,
+            Transaction.is_deleted.is_(False),
+            Transaction.is_split.is_(False),
+            Transaction.date >= date_from,
+            Transaction.date <= date_to,
+        )
+        .group_by(month_col, Transaction.transaction_type)
+    )
+    result = await session.execute(stmt)
+    return {
+        (row.month, TransactionType(row.transaction_type)): (
+            Decimal(row.total),
+            row.tx_count,
+        )
+        for row in result.all()
+    }
 
 
 async def get_transaction_detail(

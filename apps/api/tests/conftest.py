@@ -30,11 +30,23 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 # ---------------------------------------------------------------------------
 # Database fixtures
+# Tests run against a dedicated "<dbname>_test" database (created on demand):
+# session teardown drops every table, which must never hit the dev database.
 # NullPool avoids asyncpg pool connections being bound to a stale event loop.
 # ---------------------------------------------------------------------------
 
+
+def _test_database_url() -> tuple[str, str, str]:
+    """Return (test_url, admin_url, test_dbname) derived from DATABASE_URL."""
+    base_url, _, dbname = settings.DATABASE_URL.rpartition("/")
+    test_dbname = f"{dbname}_test"
+    return f"{base_url}/{test_dbname}", f"{base_url}/postgres", test_dbname
+
+
+_TEST_DATABASE_URL, _ADMIN_DATABASE_URL, _TEST_DBNAME = _test_database_url()
+
 _test_engine = create_async_engine(
-    settings.DATABASE_URL,
+    _TEST_DATABASE_URL,
     poolclass=NullPool,
 )
 _TestSessionLocal = async_sessionmaker(
@@ -42,6 +54,24 @@ _TestSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+async def _ensure_test_database() -> None:
+    admin_engine = create_async_engine(
+        _ADMIN_DATABASE_URL,
+        poolclass=NullPool,
+        isolation_level="AUTOCOMMIT",
+    )
+    try:
+        async with admin_engine.connect() as conn:
+            exists = await conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": _TEST_DBNAME},
+            )
+            if exists.scalar() is None:
+                await conn.execute(text(f'CREATE DATABASE "{_TEST_DBNAME}"'))
+    finally:
+        await admin_engine.dispose()
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -55,6 +85,7 @@ def pytest_configure(config: pytest.Config) -> None:
 async def create_test_tables() -> AsyncGenerator[None, None]:
     """Create all tables once per session; skip if DB is not available."""
     try:
+        await _ensure_test_database()
         async with _test_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     except (OperationalError, OSError, Exception) as exc:

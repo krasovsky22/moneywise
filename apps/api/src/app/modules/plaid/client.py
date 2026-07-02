@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from plaid import ApiClient, Configuration, Environment
 from plaid.api import plaid_api
 from plaid.model.accounts_get_request import AccountsGetRequest
@@ -75,12 +77,12 @@ def exchange_public_token(
     return str(response["access_token"]), str(response["item_id"])
 
 
-def get_accounts(access_token: str, is_sandbox: bool = True) -> list[dict]:
+def get_accounts(access_token: str, is_sandbox: bool = True) -> list[dict[str, Any]]:
     client = _make_client(is_sandbox)
     request = AccountsGetRequest(access_token=access_token)
     response = client.accounts_get(request)
     accounts = response["accounts"]
-    result: list[dict] = []
+    result: list[dict[str, Any]] = []
     for acct in accounts:
         balances = acct.get("balances", {})
         result.append(
@@ -102,16 +104,16 @@ def get_accounts(access_token: str, is_sandbox: bool = True) -> list[dict]:
 
 def sync_transactions(
     access_token: str, cursor: str | None, is_sandbox: bool = True
-) -> dict:
+) -> dict[str, Any]:
     client = _make_client(is_sandbox)
-    kwargs: dict = {"access_token": access_token}
+    kwargs: dict[str, Any] = {"access_token": access_token}
     if cursor:
         kwargs["cursor"] = cursor
 
     request = TransactionsSyncRequest(**kwargs)
     response = client.transactions_sync(request)
 
-    def _tx_to_dict(tx) -> dict:  # type: ignore[no-untyped-def]
+    def _tx_to_dict(tx: Any) -> dict[str, Any]:
         pfc = tx.get("personal_finance_category")
         pfc_primary = None
         pfc_dict = None
@@ -177,7 +179,7 @@ def remove_item(access_token: str, is_sandbox: bool = True) -> None:
     client.item_remove(request)
 
 
-def get_institution(institution_id: str, is_sandbox: bool = True) -> dict:
+def get_institution(institution_id: str, is_sandbox: bool = True) -> dict[str, Any]:
     client = _make_client(is_sandbox)
     request = InstitutionsGetByIdRequest(
         institution_id=institution_id,

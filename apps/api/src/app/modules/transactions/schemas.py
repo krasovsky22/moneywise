@@ -116,5 +116,17 @@ class TransactionDetailResponse(TransactionResponse):
     audit_trail: list[TransactionAuditResponse] = []
 
 
-class StatementConfirmResponse(BaseModel):
-    confirmed_count: int
+class MonthSummary(BaseModel):
+    month: str  # "YYYY-MM"
+    income: Decimal
+    expense: Decimal
+    refund: Decimal
+    transfer: Decimal
+    net: Decimal  # income + refund - expense
+    transaction_count: int
+
+
+class TransactionsSummaryResponse(BaseModel):
+    date_from: dt.date
+    date_to: dt.date
+    months: list[MonthSummary]

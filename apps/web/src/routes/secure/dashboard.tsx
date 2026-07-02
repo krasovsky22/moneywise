@@ -22,9 +22,15 @@ import {
 } from "recharts";
 
 import { useAuthStore } from "@/stores/auth";
-import { useTransactionsGlobal } from "@/features/transactions/useTransactions";
+import {
+  useTransactionsGlobal,
+  useTransactionsSummary,
+} from "@/features/transactions/useTransactions";
 import { useCards } from "@/features/cards/useCards";
-import type { Transaction } from "@/features/transactions/transactionsApi";
+import type {
+  MonthSummary,
+  Transaction,
+} from "@/features/transactions/transactionsApi";
 import type { Card as CardType } from "@/features/cards/cardsApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,26 +83,17 @@ function getMonthDateRange(yearMonth: string): {
   };
 }
 
-function getLast6MonthsRange(): { date_from: string; date_to: string } {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const fromY = from.getFullYear();
-  const fromM = String(from.getMonth() + 1).padStart(2, "0");
-  const toY = now.getFullYear();
-  const toM = String(now.getMonth() + 1).padStart(2, "0");
-  return {
-    date_from: `${fromY}-${fromM}-01`,
-    date_to: `${toY}-${toM}-${String(lastDay).padStart(2, "0")}`,
-  };
-}
-
 const MONTH_OPTIONS = buildMonthOptions();
 const CURRENT_MONTH = MONTH_OPTIONS[0]!.value;
 const CURRENT_MONTH_LABEL = new Date().toLocaleDateString("en-US", {
   month: "long",
 });
-const SIX_MONTH_RANGE = getLast6MonthsRange();
+
+// One summary window covering every selectable month (13 back) in one query.
+const SUMMARY_RANGE = {
+  date_from: `${MONTH_OPTIONS[MONTH_OPTIONS.length - 1]!.value}-01`,
+  date_to: getMonthDateRange(CURRENT_MONTH).date_to,
+};
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
@@ -109,9 +106,6 @@ const formatYAxis = (v: number) => {
   return `$${v.toFixed(0)}`;
 };
 
-const sumAmounts = (items: Transaction[]) =>
-  items.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
 // ─── Chart helpers ────────────────────────────────────────────────────────────
 
 interface ChartPoint {
@@ -121,30 +115,16 @@ interface ChartPoint {
   net: number;
 }
 
-function groupByMonthAbs(transactions: Transaction[]): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const t of transactions) {
-    const key = t.date.slice(0, 7);
-    result[key] = (result[key] ?? 0) + Math.abs(parseFloat(t.amount));
-  }
-  return result;
-}
-
-function buildChartData(
-  incomeByMonth: Record<string, number>,
-  expenseByMonth: Record<string, number>,
-): ChartPoint[] {
-  const now = new Date();
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const income = incomeByMonth[key] ?? 0;
-    const expense = expenseByMonth[key] ?? 0;
+function buildChartData(months: MonthSummary[]): ChartPoint[] {
+  return months.slice(-6).map((m) => {
+    const [y, mo] = m.month.split("-").map(Number);
     return {
-      month: d.toLocaleDateString("en-US", { month: "short" }),
-      income,
-      expense,
-      net: income - expense,
+      month: new Date(y!, mo! - 1, 1).toLocaleDateString("en-US", {
+        month: "short",
+      }),
+      income: parseFloat(m.income),
+      expense: parseFloat(m.expense),
+      net: parseFloat(m.net),
     };
   });
 }
@@ -402,9 +382,6 @@ function DashboardPage() {
   const rawName = user?.email?.split("@")[0] ?? "there";
   const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
-  const expenseRange = getMonthDateRange(expenseMonth);
-  const incomeRange = getMonthDateRange(incomeMonth);
-  const balanceRange = getMonthDateRange(balanceMonth);
   const currentMonthRange = getMonthDateRange(CURRENT_MONTH);
 
   const cardsQuery = useCards();
@@ -416,35 +393,19 @@ function DashboardPage() {
     setActivityPage(1);
   }
 
-  const expenseQuery = useTransactionsGlobal({
-    date_from: expenseRange.date_from,
-    date_to: expenseRange.date_to,
-    transaction_type: ["expense"],
-    page_size: 200,
-    sort_by: "date",
-    sort_order: "desc",
-  });
+  // Single server-side aggregation covers stat cards + cash-flow chart.
+  const summaryQuery = useTransactionsSummary(
+    SUMMARY_RANGE.date_from,
+    SUMMARY_RANGE.date_to,
+  );
 
-  const incomeQuery = useTransactionsGlobal({
-    date_from: incomeRange.date_from,
-    date_to: incomeRange.date_to,
-    transaction_type: ["income"],
-    page_size: 200,
-  });
-
-  const balanceExpenseQuery = useTransactionsGlobal({
-    date_from: balanceRange.date_from,
-    date_to: balanceRange.date_to,
-    transaction_type: ["expense"],
-    page_size: 200,
-  });
-
-  const balanceIncomeQuery = useTransactionsGlobal({
-    date_from: balanceRange.date_from,
-    date_to: balanceRange.date_to,
-    transaction_type: ["income"],
-    page_size: 200,
-  });
+  const monthMap = useMemo(
+    () =>
+      new Map<string, MonthSummary>(
+        (summaryQuery.data?.months ?? []).map((m) => [m.month, m]),
+      ),
+    [summaryQuery.data],
+  );
 
   const recentQuery = useTransactionsGlobal({
     date_from: currentMonthRange.date_from,
@@ -456,46 +417,26 @@ function DashboardPage() {
     ...(selectedCardId !== "all" ? { card_ids: [selectedCardId] } : {}),
   });
 
-  // Cash flow chart — last 6 months (API max page_size is 200)
-  const chartIncomeQuery = useTransactionsGlobal({
-    date_from: SIX_MONTH_RANGE.date_from,
-    date_to: SIX_MONTH_RANGE.date_to,
-    transaction_type: ["income"],
-    page_size: 200,
-  });
-
-  const chartExpenseQuery = useTransactionsGlobal({
-    date_from: SIX_MONTH_RANGE.date_from,
-    date_to: SIX_MONTH_RANGE.date_to,
-    transaction_type: ["expense"],
-    page_size: 200,
-  });
-
   const chartData = useMemo<ChartPoint[] | null>(() => {
-    if (!chartIncomeQuery.data || !chartExpenseQuery.data) return null;
-    return buildChartData(
-      groupByMonthAbs(chartIncomeQuery.data.items),
-      groupByMonthAbs(chartExpenseQuery.data.items),
-    );
-  }, [chartIncomeQuery.data, chartExpenseQuery.data]);
+    if (!summaryQuery.data) return null;
+    return buildChartData(summaryQuery.data.months);
+  }, [summaryQuery.data]);
 
   const totalActivityPages = recentQuery.data?.total_pages ?? 1;
 
-  const monthlySpent = expenseQuery.data
-    ? formatCurrency(sumAmounts(expenseQuery.data.items))
+  const summaryLoading = summaryQuery.isLoading;
+
+  const monthlySpent = summaryQuery.data
+    ? formatCurrency(parseFloat(monthMap.get(expenseMonth)?.expense ?? "0"))
     : null;
 
-  const monthlyIncome = incomeQuery.data
-    ? formatCurrency(sumAmounts(incomeQuery.data.items))
+  const monthlyIncome = summaryQuery.data
+    ? formatCurrency(parseFloat(monthMap.get(incomeMonth)?.income ?? "0"))
     : null;
 
-  const balanceLoading =
-    balanceIncomeQuery.isLoading || balanceExpenseQuery.isLoading;
-  const balanceValue =
-    !balanceLoading && balanceIncomeQuery.data && balanceExpenseQuery.data
-      ? sumAmounts(balanceIncomeQuery.data.items) -
-        sumAmounts(balanceExpenseQuery.data.items)
-      : null;
+  const balanceValue = summaryQuery.data
+    ? parseFloat(monthMap.get(balanceMonth)?.net ?? "0")
+    : null;
   const balanceFormatted =
     balanceValue !== null ? formatCurrency(balanceValue) : null;
   const balanceTrend: "up" | "down" | "none" =
@@ -512,8 +453,7 @@ function DashboardPage() {
 
   const sortedDateKeys = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
 
-  const chartLoading =
-    chartIncomeQuery.isLoading || chartExpenseQuery.isLoading;
+  const chartLoading = summaryLoading;
 
   return (
     <main className="w-full px-6 py-8 space-y-8">
@@ -543,7 +483,7 @@ function DashboardPage() {
         <StatCard
           title="Monthly Spent"
           amount={monthlySpent}
-          loading={expenseQuery.isLoading}
+          loading={summaryLoading}
           trend="down"
           selectedMonth={expenseMonth}
           onMonthChange={setExpenseMonth}
@@ -551,7 +491,7 @@ function DashboardPage() {
         <StatCard
           title="Monthly Income"
           amount={monthlyIncome}
-          loading={incomeQuery.isLoading}
+          loading={summaryLoading}
           trend="up"
           selectedMonth={incomeMonth}
           onMonthChange={setIncomeMonth}
@@ -559,7 +499,7 @@ function DashboardPage() {
         <StatCard
           title="My Balance"
           amount={balanceFormatted}
-          loading={balanceLoading}
+          loading={summaryLoading}
           trend={balanceTrend}
           selectedMonth={balanceMonth}
           onMonthChange={setBalanceMonth}

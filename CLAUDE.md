@@ -2,105 +2,116 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Status
+## What this is
 
-This monorepo is being scaffolded from `INITIAL_PROMPT.md`. No business logic exists yet — only the foundation wiring.
+MoneyWise — a household personal-finance app. Users connect banks via Plaid, transactions sync automatically, get categorized, and roll up into cashflow/"money left this cycle" views. Product specs live in `docs/product/` (roadmap + per-epic requirements); read the relevant epic before building a feature.
+
+Note: the original PDF-statement-upload pipeline was replaced by Plaid bank sync (Epic F01); its code, tests, and docs have been removed. Epics 03/04 in `docs/product/epics/` are historical.
 
 ## Commands
 
-### Root (requires pnpm workspaces + Turborepo)
+### Root (pnpm workspaces + Turborepo)
 ```bash
-pnpm install          # Install all JS/TS dependencies
+pnpm install          # Install JS deps + activate lefthook git hooks
 pnpm dev              # Start API (:8000) + web (:3000) concurrently
-pnpm build            # Production build for both apps
-pnpm test             # Run all tests (Vitest + pytest via Turborepo)
+pnpm build            # Production build
+pnpm test             # All tests (pytest + Vitest via Turborepo)
 pnpm lint             # Lint entire workspace
-pnpm typecheck        # TypeScript strict check + mypy
+pnpm typecheck        # tsc strict + mypy strict
+```
+
+### Makefile shortcuts
+```bash
+make up / make down            # Start/stop Postgres + Redis (docker compose)
+make migrate                   # alembic upgrade head
+make migration MSG="..."       # alembic revision --autogenerate
+make set-password EMAIL=...    # Set/reset a user password (CLI, prompts securely)
+make reset-data EMAIL=... [YES=1]  # Delete all data for a user's household
 ```
 
 ### Backend (`apps/api`)
 ```bash
 uv sync                                    # Install Python dependencies
-uv run uvicorn app.main:app --reload       # Dev server
+uv run uvicorn app.main:app --reload       # Dev server (:8000)
 uv run pytest                              # All tests
-uv run pytest tests/test_health.py        # Single test file
-uv run ruff check .                        # Lint
-uv run ruff format .                       # Format
-uv run mypy src/                           # Type check
-uv run alembic upgrade head                # Apply migrations
-uv run alembic revision --autogenerate -m "description"  # New migration
+uv run pytest tests/test_auth.py           # Single test file
+uv run pytest tests/test_auth.py -k name   # Single test
+uv run ruff check . && uv run ruff format .
+uv run mypy src/
+uv run python -m app.cli --help            # Management CLI (Typer)
 ```
 
 ### Frontend (`apps/web`)
 ```bash
 pnpm --filter web dev          # Dev server only
 pnpm --filter web test         # Vitest unit tests
-pnpm --filter web test:e2e     # Playwright E2E tests
 pnpm --filter web typecheck    # tsc --noEmit
 ```
 
-### Infrastructure
+### E2E (Playwright, repo root)
 ```bash
-docker compose up -d     # Start Postgres + Redis
-docker compose down      # Stop services
+pnpm exec playwright test                        # Runs playwright-tests/ against http://localhost:3000
+pnpm exec playwright test playwright-tests/auth.spec.ts
 ```
+E2E tests need the full stack running (`make dev` or `pnpm dev` + docker compose). Config at root `playwright.config.ts` (single worker, chromium).
 
 ## Architecture
 
-### Monorepo structure
+### Monorepo
 ```
-moneywise/
-├── apps/
-│   ├── api/     # Python FastAPI backend
-│   └── web/     # React 19 + Vite + TypeScript frontend
-├── packages/
-│   └── shared-types/    # Shared TS types (workspace:* protocol)
-├── turbo.json            # Orchestrates tasks across apps
-└── pnpm-workspace.yaml
+apps/api          # FastAPI backend (Python 3.12, uv)
+apps/web          # React 19 + Vite + TypeScript frontend
+packages/shared-types  # Shared TS types (workspace:*)
+docs/product      # Roadmap + epics (product source of truth)
+playwright-tests  # Root-level E2E suites
 ```
+Turborepo orchestrates JS tasks; `apps/api` is wired in via `uv run` scripts so root `pnpm` commands span both.
 
-Turborepo orchestrates JS/TS tasks natively; the Python `apps/api` is wired via `uv run` scripts so root `pnpm` commands span both.
+### Multi-tenancy: everything is household-scoped
 
-### Backend (`apps/api`)
+The core data-isolation unit is the **household** (`modules/household`). Users belong to a household (with roles + invitations); cards, bank accounts, categories, and transactions all carry `household_id` and every service query filters by it. When adding features, scope new tables and queries by `household_id`, never by `user_id` alone.
 
-Domain-driven layout under `src/app/`:
-- `core/` — settings (Pydantic Settings), database session, security (JWT), structured logging
-- `api/v1/` — versioned route registration; each endpoint file is thin (delegates to services)
-- `modules/<feature>/` — each feature owns `router.py`, `schemas.py`, `models.py`, `service.py`, `dependencies.py`
-- `common/` — shared exceptions, base models, utilities
+### Backend (`apps/api/src/app/`)
 
-Key patterns:
-- **Async-first**: all routes, SQLAlchemy sessions, and DB queries are async
-- **Pydantic Settings** loads env vars — never access `os.environ` directly in app code
-- **FastAPI is OpenAPI-first**: the auto-generated spec at `/docs` is the source of truth; a typed TS client will later be generated from it (TODO in `lib/api-client.ts`)
-- CORS middleware is configured to allow the React dev server origin
+- `core/` — Pydantic Settings (`config.py` — never read `os.environ` directly), async SQLAlchemy session (`database.py`), JWT (`security.py`), structlog
+- `api/v1/router.py` — aggregates module routers under `/api/v1`
+- `modules/<feature>/` — each feature owns `router.py` (thin), `schemas.py`, `models.py`, `service.py` (business logic), `dependencies.py`
+- `common/` — shared exceptions (typed HTTP errors), base model
+- `cli.py` — Typer management CLI reusing the same async DB session
 
-### Frontend (`apps/web`)
+Modules: `auth` (JWT access + refresh tokens), `users`, `household`, `cards` (credit cards + billing cycles), `bank_accounts`, `categories` (household + global system categories, rules), `transactions` (types: expense/income/transfer/refund; splits; change history), `plaid`.
 
-Feature-based layout under `src/`:
-- `routes/` — TanStack Router file-based routes (`__root.tsx`, `index.tsx`, etc.)
-- `features/<name>/` — co-located components, hooks, and API calls per feature
-- `components/ui/` — shadcn/ui primitives only (no business logic)
-- `lib/api-client.ts` — configured Axios/ky instance (proxy target: `/api` → `http://localhost:8000`)
-- `lib/query-client.ts` — TanStack Query setup
-- `stores/` — Zustand stores for client state
+**Plaid module** (`modules/plaid/`): `client.py` wraps the Plaid SDK, `crypto.py` encrypts access tokens at rest (Fernet — needs `PLAID_TOKEN_ENCRYPTION_KEY` in `.env`), `sync.py` does cursor-based incremental transaction sync, initial sync runs in-process via FastAPI `BackgroundTasks` (no worker). Sandbox login: `user_good` / `pass_good`.
 
-Key patterns:
-- Vite dev proxy forwards `/api` → `http://localhost:8000` (no CORS in dev)
-- `import.meta.env` accessed only through a typed wrapper — never raw in app code
-- TypeScript strict mode; no `any` without a justifying comment
-- MSW used for API mocking in tests and optionally in dev
+**Adding a module:** create `modules/<name>/` with the five files → import models in `alembic/env.py` → register router in `api/v1/router.py` → `make migration MSG="..."` + `make migrate`.
 
-### Data flow (request lifecycle)
+All routes, sessions, and queries are async. Tests use pytest-asyncio in auto mode (no `@pytest.mark.asyncio` needed).
+
+### Frontend (`apps/web/src/`)
+
+- `routes/` — TanStack Router file-based routes. `secure.tsx` is the authenticated layout; app pages live under `routes/secure/` (dashboard, transactions, wallet, settings). `routeTree.gen.ts` is auto-generated — never edit.
+- `features/<name>/` — per feature: `<name>Api.ts` (ky calls), `use<Name>.ts` (TanStack Query hooks), components
+- `components/ui/` — shadcn/ui primitives only, no business logic
+- `lib/api-client.ts` — ky instance; all API calls go through it (attaches auth, handles refresh)
+- `lib/env.ts` — typed wrapper for `import.meta.env`; never access it raw
+- `stores/auth.ts` — Zustand auth store
+
+Vite dev proxy forwards `/api` → `http://localhost:8000`, so no CORS in dev. MSW mocks the API in Vitest tests (`tests/mocks/`).
+
+### Request lifecycle
 ```
-Browser → TanStack Query (cache) → api-client.ts (Axios/ky) → Vite proxy
-→ FastAPI route → service → async SQLAlchemy session → PostgreSQL
+Browser → TanStack Query → api-client.ts (ky) → Vite proxy
+→ FastAPI route → service → async SQLAlchemy → PostgreSQL
 ```
 
 ## Conventions
 
-- **Python 3.12+**, fully type-annotated, `mypy --strict` clean
-- **TypeScript strict mode** on across the entire frontend
-- All secrets in `.env` (gitignored); `.env.example` checked in with placeholder values
-- Internal packages referenced with `workspace:*` protocol
-- Pre-commit hooks (lefthook or husky + lint-staged) run `ruff` on Python and ESLint/Prettier on TS/TSX
+- Python fully type-annotated, `mypy --strict` clean; ruff for lint + format (line length 88)
+- TypeScript strict; no `any` without a justifying comment
+- Secrets in `.env` (gitignored); `.env.example` checked in. Plaid needs `PLAID_SANDBOX_CLIENT_ID`/`PLAID_SANDBOX_SECRET`, `PLAID_PROD_CLIENT_ID`/`PLAID_PROD_SECRET`, and `PLAID_TOKEN_ENCRYPTION_KEY` in `apps/api/.env`. There is no `PLAID_ENV` — sandbox vs production is a per-household flag (`Household.is_plaid_sandbox`, defaults to sandbox)
+- lefthook pre-commit hooks run ruff on Python, ESLint/Prettier on TS
+- FastAPI's OpenAPI spec (`/docs`) is the API contract source of truth
+
+## Sub-agents
+
+`.claude/agents/` defines `product-manager` (coordinates, never writes code), `api-backend` (owns `apps/api/`), `web-frontend` (owns `apps/web/`), and `qa-playwright` (browser-tests the live app at :3000). Use them when delegating feature work.

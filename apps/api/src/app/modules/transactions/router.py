@@ -4,12 +4,12 @@ import csv
 import io
 import math
 import uuid
-from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
+from collections.abc import AsyncGenerator
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.modules.transactions.models import Transaction, TransactionType
 from app.modules.transactions.schemas import (
     BulkUpdateRequest,
     BulkUpdateResponse,
+    MonthSummary,
     PaginatedTransactions,
     SoftDeleteResponse,
     SplitRequest,
@@ -27,9 +28,12 @@ from app.modules.transactions.schemas import (
     TransactionCreate,
     TransactionDetailResponse,
     TransactionResponse,
+    TransactionsSummaryResponse,
     TransactionUpdate,
 )
 from app.modules.transactions.service import (
+    apply_sort,
+    build_transactions_query,
     bulk_update,
     create_transaction,
     get_transaction,
@@ -38,6 +42,7 @@ from app.modules.transactions.service import (
     restore_transaction,
     soft_delete,
     split_transaction,
+    summarize_by_month,
     update_transaction,
 )
 from app.modules.users.dependencies import get_current_user
@@ -90,11 +95,8 @@ async def export_transactions_csv(
         if t in TransactionType._value2member_map_
     ]
 
-    items, _ = await list_transactions_global(
-        session=db,
-        household_id=household_id,
-        page=1,
-        page_size=100_000,
+    stmt = build_transactions_query(
+        household_id,
         q=q,
         date_from=date_from,
         date_to=date_to,
@@ -106,13 +108,14 @@ async def export_transactions_csv(
         is_user_confirmed=is_user_confirmed,
         source=source,
         transaction_types=parsed_types or None,
-        sort_by=sort_by,
-        sort_order=sort_order,
     )
+    stmt = apply_sort(stmt, sort_by, sort_order)
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")
 
-    def generate() -> Generator[str, None, None]:
+    async def generate() -> AsyncGenerator[str, None]:
+        # The get_db session stays open while streaming: FastAPI runs
+        # dependency teardown only after the response body is sent.
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(
@@ -131,7 +134,8 @@ async def export_transactions_csv(
         output.truncate(0)
         output.seek(0)
 
-        for tx in items:
+        result = await db.stream_scalars(stmt.execution_options(yield_per=500))
+        async for tx in result:
             writer.writerow(
                 [
                     tx.date.isoformat(),
@@ -154,6 +158,70 @@ async def export_transactions_csv(
         headers={
             "Content-Disposition": f'attachment; filename="transactions-{today}.csv"'
         },
+    )
+
+
+@router.get(
+    "/transactions/summary",
+    response_model=TransactionsSummaryResponse,
+)
+async def transactions_summary_route(
+    date_from: Annotated[str, Query()],
+    date_to: Annotated[str, Query()],
+    household_id: uuid.UUID = Depends(get_household_id),
+    db: AsyncSession = Depends(get_db),
+) -> TransactionsSummaryResponse:
+    try:
+        parsed_from = date.fromisoformat(date_from)
+        parsed_to = date.fromisoformat(date_to)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from and date_to must be ISO dates (YYYY-MM-DD)",
+        ) from exc
+    if parsed_from > parsed_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from must be on or before date_to",
+        )
+
+    totals = await summarize_by_month(db, household_id, parsed_from, parsed_to)
+
+    zero = Decimal("0")
+    months: list[MonthSummary] = []
+    cursor = date(parsed_from.year, parsed_from.month, 1)
+    while cursor <= parsed_to:
+        key = f"{cursor.year:04d}-{cursor.month:02d}"
+
+        def amount_of(tx_type: TransactionType, *, _key: str = key) -> Decimal:
+            return totals.get((_key, tx_type), (zero, 0))[0]
+
+        income = amount_of(TransactionType.income)
+        expense = amount_of(TransactionType.expense)
+        refund = amount_of(TransactionType.refund)
+        transfer = amount_of(TransactionType.transfer)
+        count = sum(totals.get((key, t), (zero, 0))[1] for t in TransactionType)
+        months.append(
+            MonthSummary(
+                month=key,
+                income=income,
+                expense=expense,
+                refund=refund,
+                transfer=transfer,
+                net=income + refund - expense,
+                transaction_count=count,
+            )
+        )
+        cursor = (
+            date(cursor.year + 1, 1, 1)
+            if cursor.month == 12
+            else date(cursor.year, cursor.month + 1, 1)
+        )
+
+    return TransactionsSummaryResponse(
+        date_from=parsed_from,
+        date_to=parsed_to,
+        months=months,
     )
 
 

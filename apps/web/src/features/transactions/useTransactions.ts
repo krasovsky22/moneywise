@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listTransactionsGlobal,
+  getTransactionsSummary,
   getTransactionDetail,
   createTransaction,
   updateTransaction,
@@ -22,6 +23,8 @@ export const transactionKeys = {
   lists: () => [...transactionKeys.all, "list"] as const,
   list: (filters: TransactionFilters) => [...transactionKeys.lists(), filters] as const,
   detail: (id: string) => [...transactionKeys.all, "detail", id] as const,
+  summary: (dateFrom: string, dateTo: string) =>
+    [...transactionKeys.all, "summary", dateFrom, dateTo] as const,
 };
 
 // ─── Global list ─────────────────────────────────────────────────────────────
@@ -30,6 +33,15 @@ export function useTransactionsGlobal(filters: TransactionFilters) {
   return useQuery({
     queryKey: transactionKeys.list(filters),
     queryFn: () => listTransactionsGlobal(filters),
+  });
+}
+
+// ─── Monthly summary ─────────────────────────────────────────────────────────
+
+export function useTransactionsSummary(dateFrom: string, dateTo: string) {
+  return useQuery({
+    queryKey: transactionKeys.summary(dateFrom, dateTo),
+    queryFn: () => getTransactionsSummary(dateFrom, dateTo),
   });
 }
 
@@ -50,7 +62,7 @@ export function useCreateTransaction() {
   return useMutation({
     mutationFn: (body: TransactionCreate) => createTransaction(body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -84,7 +96,7 @@ export function useSplitTransaction() {
     mutationFn: ({ id, body }: { id: string; body: SplitRequest }) =>
       splitTransaction(id, body),
     onSuccess: (_result, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       void queryClient.invalidateQueries({ queryKey: transactionKeys.detail(id) });
     },
   });
@@ -97,7 +109,7 @@ export function useBulkUpdate() {
   return useMutation({
     mutationFn: (body: BulkUpdateRequest) => bulkUpdateTransactions(body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -109,7 +121,7 @@ export function useDeleteTransaction() {
   return useMutation({
     mutationFn: (id: string) => deleteTransaction(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }
@@ -121,7 +133,7 @@ export function useRestoreTransaction() {
   return useMutation({
     mutationFn: (id: string) => restoreTransaction(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: transactionKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }

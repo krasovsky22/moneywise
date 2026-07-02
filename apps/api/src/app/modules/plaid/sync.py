@@ -5,12 +5,14 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select, text, update
+import structlog
+from sqlalchemy import case, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bank_accounts.models import BankAccount
-from app.modules.categories.models import Category
+from app.modules.categories.models import Category, CategoryRule
+from app.modules.categories.service import apply_rules, list_rules
 from app.modules.household.models import Household
 from app.modules.plaid import client as plaid_client
 from app.modules.plaid.crypto import decrypt_token
@@ -21,6 +23,8 @@ from app.modules.plaid.models import (
     PlaidSyncType,
 )
 from app.modules.transactions.models import Transaction, TransactionType
+
+logger = structlog.get_logger(__name__)
 
 
 def _tx_to_json_safe(tx: dict[str, Any]) -> dict[str, Any]:
@@ -112,7 +116,10 @@ async def sync_item(
         cursor_before=cursor_before,
     )
     db.add(log)
-    await db.flush()
+    # Persist the log row up front so it survives a mid-sync rollback.
+    await db.commit()
+
+    rules = await list_rules(db, plaid_item.household_id)
 
     total_added = 0
     total_modified = 0
@@ -129,11 +136,11 @@ async def sync_item(
             )
 
             for tx in page["added"]:
-                await _upsert_transaction(db, plaid_item, tx)
+                await _upsert_transaction(db, plaid_item, tx, rules)
                 total_added += 1
 
             for tx in page["modified"]:
-                await _upsert_transaction(db, plaid_item, tx)
+                await _upsert_transaction(db, plaid_item, tx, rules)
                 total_modified += 1
 
             for plaid_tx_id in page["removed"]:
@@ -144,17 +151,31 @@ async def sync_item(
             has_more = page["has_more"]
 
             if current_cursor:
+                plaid_item.cursor = current_cursor
+
+            # Commit each page atomically: the cursor only ever advances
+            # together with the transactions fetched under it, so a failure
+            # on a later page can never skip data on resume.
+            await db.commit()
+            if current_cursor:
                 cursor_after = current_cursor
-                plaid_item.cursor = cursor_after
-                await db.flush()
 
         plaid_item.last_synced_at = datetime.now(UTC)
-        await db.flush()
 
     except Exception as exc:
+        await db.rollback()
+        # rollback expires ORM state; reload before mutating.
+        await db.refresh(plaid_item)
+        await db.refresh(log)
         error_msg = str(exc)
         plaid_item.status = PlaidItemStatus.error
-        await db.flush()
+        logger.exception(
+            "plaid_sync_failed",
+            plaid_item_id=str(plaid_item.id),
+            household_id=str(plaid_item.household_id),
+            sync_type=sync_type.value,
+            cursor_before=cursor_before,
+        )
 
     log.cursor_after = cursor_after
     log.added_count = total_added
@@ -162,7 +183,16 @@ async def sync_item(
     log.removed_count = total_removed
     log.error = error_msg
     log.completed_at = datetime.now(UTC)
-    await db.flush()
+    await db.commit()
+
+    if error_msg is None:
+        logger.info(
+            "plaid_sync_completed",
+            plaid_item_id=str(plaid_item.id),
+            added=total_added,
+            modified=total_modified,
+            removed=total_removed,
+        )
 
     return log
 
@@ -171,6 +201,7 @@ async def _upsert_transaction(
     db: AsyncSession,
     plaid_item: PlaidItem,
     tx: dict[str, Any],
+    rules: list[CategoryRule],
 ) -> None:
     plaid_tx_id: str = tx["transaction_id"]
     plaid_account_id: str = tx["account_id"]
@@ -201,7 +232,12 @@ async def _upsert_transaction(
     category_id: str | None = None
     is_low_confidence = True
 
-    if pfc_primary and pfc_primary in CATEGORY_MAP:
+    # Household merchant rules take precedence over Plaid's category.
+    matched_rule = apply_rules(rules, merchant_name) if merchant_name else None
+    if matched_rule is not None:
+        category_id = str(matched_rule.category_id)
+        is_low_confidence = False
+    elif pfc_primary and pfc_primary in CATEGORY_MAP:
         mapped_name = CATEGORY_MAP[pfc_primary]
         category_id, is_low_confidence = await _find_category_id(
             db, plaid_item.household_id, mapped_name
@@ -229,17 +265,32 @@ async def _upsert_transaction(
         plaid_raw_metadata=raw_metadata,
     )
 
+    # For user-confirmed transactions keep the user's categorization and
+    # merchant edits; the bank stays authoritative for amount/date/pending.
+    confirmed = Transaction.is_user_confirmed.is_(True)
     stmt = stmt.on_conflict_do_update(
         index_elements=["plaid_transaction_id"],
         index_where=text("plaid_transaction_id IS NOT NULL"),
         set_={
             "amount": stmt.excluded.amount,
-            "merchant_clean": stmt.excluded.merchant_clean,
+            "merchant_clean": case(
+                (confirmed, Transaction.merchant_clean),
+                else_=stmt.excluded.merchant_clean,
+            ),
             "merchant_raw": stmt.excluded.merchant_raw,
             "date": stmt.excluded.date,
-            "transaction_type": stmt.excluded.transaction_type,
-            "category_id": stmt.excluded.category_id,
-            "is_low_confidence": stmt.excluded.is_low_confidence,
+            "transaction_type": case(
+                (confirmed, Transaction.transaction_type),
+                else_=stmt.excluded.transaction_type,
+            ),
+            "category_id": case(
+                (confirmed, Transaction.category_id),
+                else_=stmt.excluded.category_id,
+            ),
+            "is_low_confidence": case(
+                (confirmed, Transaction.is_low_confidence),
+                else_=stmt.excluded.is_low_confidence,
+            ),
             "pending": stmt.excluded.pending,
             "plaid_raw_metadata": stmt.excluded.plaid_raw_metadata,
             "updated_at": datetime.now(UTC),

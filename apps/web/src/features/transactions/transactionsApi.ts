@@ -154,6 +154,22 @@ export interface SoftDeleteResponse {
   undo_until: string;
 }
 
+export interface MonthSummary {
+  month: string; // "YYYY-MM"
+  income: string;
+  expense: string;
+  refund: string;
+  transfer: string;
+  net: string; // income + refund - expense
+  transaction_count: number;
+}
+
+export interface TransactionsSummary {
+  date_from: string;
+  date_to: string;
+  months: MonthSummary[];
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildSearchParams(filters: TransactionFilters): URLSearchParams {
@@ -189,6 +205,17 @@ export async function listTransactionsGlobal(
   return apiClient
     .get("api/v1/transactions", { searchParams: buildSearchParams(filters) })
     .json<PaginatedTransactions>();
+}
+
+export async function getTransactionsSummary(
+  dateFrom: string,
+  dateTo: string,
+): Promise<TransactionsSummary> {
+  return apiClient
+    .get("api/v1/transactions/summary", {
+      searchParams: { date_from: dateFrom, date_to: dateTo },
+    })
+    .json<TransactionsSummary>();
 }
 
 export async function getTransactionDetail(id: string): Promise<TransactionDetail> {

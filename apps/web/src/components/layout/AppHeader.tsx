@@ -1,7 +1,15 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Search, ChevronDown, Settings, Moon, LogOut } from "lucide-react";
+import {
+  Bell,
+  Search,
+  ChevronDown,
+  Settings,
+  Moon,
+  LogOut,
+  FlaskConical,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
@@ -26,6 +34,18 @@ function UserAvatar({ name }: { name: string }) {
     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
       {(name[0] ?? "?").toUpperCase()}
     </div>
+  );
+}
+
+function SandboxBadge() {
+  return (
+    <span
+      title="This household is connected to Plaid Sandbox — bank data is simulated"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400"
+    >
+      <FlaskConical className="h-3 w-3" />
+      Sandbox
+    </span>
   );
 }
 
@@ -101,6 +121,7 @@ export function AppHeader() {
               className="flex items-center gap-2.5 rounded-xl px-2 py-1 transition-colors hover:bg-primary-subtle"
             >
               <UserAvatar name={displayName} />
+              {household?.is_plaid_sandbox && <SandboxBadge />}
               <div className="text-left">
                 <p className="text-xs leading-tight text-muted-foreground">
                   {householdName}
@@ -125,9 +146,12 @@ export function AppHeader() {
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Family
                   </p>
-                  <p className="mt-0.5 text-sm font-semibold text-foreground">
-                    {householdName}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      {householdName}
+                    </p>
+                    {household?.is_plaid_sandbox && <SandboxBadge />}
+                  </div>
                   <p className="mt-0.5 text-xs capitalize text-muted-foreground">
                     {displayName}
                   </p>

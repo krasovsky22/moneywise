@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,8 @@ from app.modules.plaid.service import (
 from app.modules.plaid.sync import sync_item
 from app.modules.users.dependencies import get_current_user
 from app.modules.users.models import User
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/plaid", tags=["plaid"])
 
@@ -63,6 +66,7 @@ async def _run_initial_sync(item_id: uuid.UUID, household_id: uuid.UUID) -> None
             await db.commit()
         except Exception:
             await db.rollback()
+            logger.exception("plaid_initial_sync_failed", plaid_item_id=str(item_id))
 
 
 @router.post(
