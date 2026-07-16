@@ -68,6 +68,7 @@ Visit:
 | Command                       | Description                     |
 | ----------------------------- | ------------------------------- |
 | `pnpm dev`                    | Start API + web concurrently    |
+| `pnpm dev:log`                | Same, but also logs to `/tmp/moneywise-dev.log` for AI debugging |
 | `pnpm test`                   | Run all tests (pytest + Vitest) |
 | `pnpm lint`                   | Lint all packages               |
 | `pnpm typecheck`              | TypeScript + mypy strict check  |
@@ -185,7 +186,7 @@ This project ships four Claude Code sub-agents in `.claude/agents/`: `product-ma
 
 ### Debugging with AI agents
 
-To let agents see dev-server logs and browser DevTools output (console errors, failed network requests) while troubleshooting, see [docs/dev-ai-debugging.md](docs/dev-ai-debugging.md). Short version: have Claude start `pnpm dev` as a background task (it captures all output), or pipe your own terminal through `tee` to a log file; for browser bugs, agents drive Playwright/Chrome DevTools via MCP, and `google-chrome --remote-debugging-port=9222` lets them attach to your own Chrome session.
+To let agents see dev-server logs and browser DevTools output (console errors, failed network requests) while troubleshooting, see [docs/dev-ai-debugging.md](docs/dev-ai-debugging.md). Short version: have Claude start `pnpm dev` as a background task (it captures all output), or run `pnpm dev:log` in your own terminal — it mirrors all output to `/tmp/moneywise-dev.log`, which agents can read; for browser bugs, agents drive Playwright/Chrome DevTools via MCP, and `google-chrome --remote-debugging-port=9222` lets them attach to your own Chrome session.
 
 ## Database (Cloud)
 

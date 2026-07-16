@@ -18,14 +18,15 @@ being pasted manually. Claude is also notified if the process exits unexpectedly
 
 ### Option B: user-owned terminal with a shared log file
 
-If you want to own the process (live output, Ctrl-C control), pipe through `tee`:
+If you want to own the process (live output, Ctrl-C control), use the `dev:log`
+script:
 
 ```bash
-pnpm dev 2>&1 | tee /tmp/moneywise-dev.log
+pnpm dev:log   # = turbo run dev 2>&1 | tee /tmp/moneywise-dev.log
 ```
 
-Then tell Claude the log path — it reads/tails `/tmp/moneywise-dev.log` when
-troubleshooting. Use a fixed path so it's easy to reference across sessions.
+You see everything live as usual, and every line is also mirrored to
+`/tmp/moneywise-dev.log`, which Claude reads/tails when troubleshooting.
 
 ### Not recommended for servers
 
