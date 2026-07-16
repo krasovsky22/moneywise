@@ -1,22 +1,9 @@
 import { test, expect, type Page } from "playwright/test";
-
-const BASE_URL = "http://localhost:3000";
-const UNIQUE_SUFFIX = Date.now();
-const QA_EMAIL = `qa-wallet-${UNIQUE_SUFFIX}@example.com`;
-const QA_PASSWORD = "TestPass123!";
+import { BASE_URL, loginAsQaAgent, resetQaData } from "../helpers/qa-account";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-async function signupAndWait(page: Page, email: string, password: string) {
-  await page.goto(`${BASE_URL}/signup`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByLabel("Confirm Password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL(`${BASE_URL}/secure/dashboard`);
-}
 
 async function navigateToWallet(page: Page) {
   await page.goto(`${BASE_URL}/secure/wallet`);
@@ -54,27 +41,18 @@ async function addCard(
 }
 
 // ---------------------------------------------------------------------------
-// Setup: create account once before all tests
+// Setup: shared QA agent account (docs/testing/qa-agent-account.md), seeded by
+// migrations. The household is persistent, so wipe it once before the suite —
+// the empty-state tests below rely on a clean slate.
 // ---------------------------------------------------------------------------
 
-test.beforeAll(async ({ browser }) => {
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  try {
-    await signupAndWait(page, QA_EMAIL, QA_PASSWORD);
-  } catch {
-    // Account may already exist — that is fine
-  }
-  await ctx.close();
+test.beforeAll(() => {
+  resetQaData();
 });
 
 // Log in before each test
 test.beforeEach(async ({ page }) => {
-  await page.goto(`${BASE_URL}/login`);
-  await page.getByLabel("Email").fill(QA_EMAIL);
-  await page.getByLabel("Password").fill(QA_PASSWORD);
-  await page.getByRole("button", { name: "Log in" }).click();
-  await page.waitForURL(`${BASE_URL}/secure/dashboard`);
+  await loginAsQaAgent(page);
 });
 
 // ---------------------------------------------------------------------------
@@ -86,7 +64,7 @@ test.describe("Wallet — page load", () => {
     await page.getByRole("link", { name: "My Wallet" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/secure/wallet`);
     await expect(page.getByRole("heading", { name: "My Wallet", level: 1 })).toBeVisible();
-    // The account is fresh per test-run so no cards exist yet
+    // The household was reset in beforeAll so no cards exist yet
     await expect(page.getByText("No cards yet. Add one to get started.")).toBeVisible();
   });
 

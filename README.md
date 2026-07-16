@@ -1,6 +1,6 @@
 # MoneyWise
 
-Personal finance management app — monorepo scaffold.
+Household personal-finance app: connect banks via Plaid, transactions sync and categorize automatically, and roll up into cashflow views. Product specs live in `docs/product/`.
 
 ## Architecture
 
@@ -59,7 +59,7 @@ pnpm dev
 
 Visit:
 
-- **Frontend:** http://localhost:3000 — shows API health status
+- **Frontend:** http://localhost:3000 — sign up, then dashboard / transactions / wallet / subscriptions under `/secure/*`
 - **API docs:** http://localhost:8000/docs — FastAPI OpenAPI UI
 - **API health:** http://localhost:8000/api/v1/health
 
@@ -103,14 +103,17 @@ pnpm --filter web dev > /tmp/web.log 2>&1 &
 
 MoneyWise integrates with [Plaid](https://plaid.com) to automatically sync transactions from banks and credit cards. Users connect an institution once via Plaid Link; the system maintains the connection and pulls new transactions incrementally using a cursor-based sync.
 
-**Required env vars** (add to `apps/api/.env`):
+**Required env vars** (add to `apps/api/.env`; see `apps/api/.env.example`):
 
-| Variable                    | Description                                                       |
-| --------------------------- | ----------------------------------------------------------------- |
-| `PLAID_CLIENT_ID`           | From [Plaid Dashboard](https://dashboard.plaid.com)               |
-| `PLAID_SECRET`              | Environment-specific secret from Plaid Dashboard                  |
-| `PLAID_ENV`                 | `sandbox` (dev) · `development` · `production`                    |
-| `PLAID_TOKEN_ENCRYPTION_KEY`| Fernet key — generate with the command below                      |
+| Variable                     | Description                                                      |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `PLAID_SANDBOX_CLIENT_ID`    | Sandbox credentials from [Plaid Dashboard](https://dashboard.plaid.com) |
+| `PLAID_SANDBOX_SECRET`       | Sandbox secret                                                   |
+| `PLAID_PROD_CLIENT_ID`       | Production credentials (optional until going live)               |
+| `PLAID_PROD_SECRET`          | Production secret                                                |
+| `PLAID_TOKEN_ENCRYPTION_KEY` | Fernet key — generate with the command below. If unset, access tokens are stored in **plaintext** |
+
+There is no `PLAID_ENV` — sandbox vs production is a per-household flag (`Household.is_plaid_sandbox`, defaults to sandbox).
 
 ```bash
 # Generate encryption key (run once, store in .env, never commit)
@@ -127,15 +130,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Background / Worker Commands
 
-All background processing (initial Plaid sync after connection) runs in-process via FastAPI `BackgroundTasks`. No separate worker is needed.
-
-When a job queue is added for scheduled sync (post-MVP), the worker will be started alongside the API:
-
-```bash
-# Placeholder — not yet wired for scheduled cron sync
-cd apps/api
-uv run celery -A app.worker worker --beat
-```
+All background processing (initial Plaid sync after connection, subscription detection after each sync) runs in-process via FastAPI `BackgroundTasks`. There is no separate worker or job queue; sync happens on connect or via the manual re-sync button.
 
 ## Management CLI
 
@@ -148,7 +143,7 @@ make set-password EMAIL=user@example.com
 # Pass password directly (useful in CI/scripts)
 make set-password EMAIL=user@example.com PASSWORD=newpassword
 
-# Delete all statements and transactions for a user's household (prompts for confirmation)
+# Delete all data for a user's household (prompts for confirmation)
 make reset-data EMAIL=user@example.com
 
 # Skip the confirmation prompt (useful in scripts)
@@ -186,68 +181,11 @@ uv run python -m app.cli reset-data --help
 
 ## Claude Code Agents
 
-This project ships three Claude Code sub-agents in `.claude/agents/`. Invoke them by name when delegating work inside Claude Code.
+This project ships four Claude Code sub-agents in `.claude/agents/`: `product-manager` (coordinates feature work), `api-backend` (owns `apps/api/`), `web-frontend` (owns `apps/web/`), and `qa-playwright` (browser-tests the live app). The agent files themselves and the "Agentic workflow" section of [CLAUDE.md](CLAUDE.md) are the source of truth for how they operate — this README intentionally doesn't duplicate them.
 
-### `product-manager`
+### Debugging with AI agents
 
-**Role:** Feature coordinator — no code, only analysis and delegation.
-
-Workflow for any feature request:
-
-1. Audits the codebase to understand current state
-2. Defines acceptance criteria and identifies gaps
-3. Splits work into backend and frontend tracks
-4. Delegates to `api-backend` and/or `web-frontend` (in parallel when independent, sequentially when frontend depends on a backend contract)
-5. Verifies completion against acceptance criteria and re-delegates if anything is missing
-
-May write planning docs under `.planning/`. Never touches `apps/`.
-
----
-
-### `api-backend`
-
-**Role:** Python FastAPI professional — owns everything in `apps/api/`.
-
-Responsibilities:
-
-- FastAPI routes, services, schemas, ORM models
-- Alembic migrations
-- Async SQLAlchemy sessions and dependency injection
-- pytest tests, mypy strict, ruff lint/format
-
-Key constraints: all DB/route code is async; route handlers are thin (delegate to a service); never access `os.environ` directly — use Pydantic Settings.
-
----
-
-### `web-frontend`
-
-**Role:** React UI developer — owns everything in `apps/web/`.
-
-Responsibilities:
-
-- TanStack Router file-based routes and layouts
-- Feature components and `use<Feature>.ts` hooks (TanStack Query)
-- Zustand stores for client state
-- shadcn/ui + Tailwind for all UI — no raw HTML elements when a primitive exists
-- Vitest unit tests and Playwright E2E tests
-
-Key constraints: TypeScript strict (no `any` without comment); all API calls through `src/lib/api-client.ts`; env vars only through the typed wrapper; accessible markup with `aria-label` on ambiguous controls.
-
----
-
-### Example usage
-
-```
-# Describe a feature to the product manager and let it coordinate:
-"Add a monthly budget tracker — users can set a budget per category and see spending vs budget."
-
-# The product-manager agent will:
-# 1. Audit existing models and routes
-# 2. Define backend tasks (Budget model, migration, CRUD endpoints)
-# 3. Define frontend tasks (budget route, BudgetCard component, useBudget hook)
-# 4. Delegate to api-backend (backend), then web-frontend (frontend)
-# 5. Confirm both tracks meet acceptance criteria
-```
+To let agents see dev-server logs and browser DevTools output (console errors, failed network requests) while troubleshooting, see [docs/dev-ai-debugging.md](docs/dev-ai-debugging.md). Short version: have Claude start `pnpm dev` as a background task (it captures all output), or pipe your own terminal through `tee` to a log file; for browser bugs, agents drive Playwright/Chrome DevTools via MCP, and `google-chrome --remote-debugging-port=9222` lets them attach to your own Chrome session.
 
 ## Database (Cloud)
 

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm build)",
+      "Bash(pnpm install)",
+      "Bash(pnpm --filter web test)",
+      "Bash(pnpm --filter web test:*)",
+      "Bash(pnpm --filter web lint)",
+      "Bash(pnpm --filter web typecheck)",
+      "Bash(pnpm exec playwright test:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run alembic:*)",
+      "Bash(make migrate)",
+      "Bash(make migration:*)",
+      "Bash(make up)",
+      "Bash(make down)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)"
+    ]
+  }
+}

@@ -1,41 +1,24 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "playwright/test";
+import { BASE_URL as BASE, loginAsQaAgent, resetQaData } from "../helpers/qa-account";
 
 /**
  * Bank Accounts feature tests.
  *
- * These tests use a static QA account.  The account is created via the
- * /signup route when it does not yet exist; once created the same credentials
- * are reused across runs.
- *
- * NOTE: The Pydantic EmailStr validator on the backend rejects the `.test`
- * TLD, so the QA email uses a real TLD (gmail.com).
+ * Uses the shared QA agent account (docs/testing/qa-agent-account.md) — seeded
+ * by migrations, never signed up here. The household is wiped once before the
+ * suite so the empty-state assertions start from a clean slate.
  */
 
-const QA_EMAIL = "qa_moneywise@gmail.com";
-const QA_PASSWORD = "TestPass123!";
-const BASE = "http://localhost:3000";
+test.beforeAll(() => {
+  resetQaData();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function ensureLoggedIn(page: import("@playwright/test").Page) {
-  // Try to log in; if login fails (account not created yet), sign up first.
-  await page.goto(`${BASE}/login`);
-  await page.getByRole("textbox", { name: "Email" }).fill(QA_EMAIL);
-  await page.getByRole("textbox", { name: "Password", exact: true }).fill(QA_PASSWORD);
-  await page.getByRole("button", { name: "Log in" }).click();
-
-  // If we ended up on a login error state, create the account first
-  const url = page.url();
-  if (!url.includes("/secure/")) {
-    await page.goto(`${BASE}/signup`);
-    await page.getByRole("textbox", { name: "Email" }).fill(QA_EMAIL);
-    await page.getByRole("textbox", { name: "Password", exact: true }).fill(QA_PASSWORD);
-    await page.getByRole("textbox", { name: "Confirm Password" }).fill(QA_PASSWORD);
-    await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForURL(/\/secure\//);
-  }
+async function ensureLoggedIn(page: Page) {
+  await loginAsQaAgent(page);
 }
 
 // ---------------------------------------------------------------------------

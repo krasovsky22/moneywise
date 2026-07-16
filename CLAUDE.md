@@ -8,7 +8,7 @@ MoneyWise — a household personal-finance app. Users connect banks via Plaid, t
 
 Note: the original PDF-statement-upload pipeline was replaced by Plaid bank sync (Epic F01); its code, tests, and docs have been removed. Epics 03/04 in `docs/product/epics/` are historical.
 
-Design review notes and suggested UI updates: `docs/design/design-suggestions.md`. Dedicated QA agent account (for Playwright specs and the `qa-playwright` sub-agent — AI agents only, never for humans): `docs/testing/qa-agent-account.md`.
+Design review notes and suggested UI updates: `docs/design/design-suggestions.md`. Running the dev server / browser MCP so AI agents can see logs: `docs/dev-ai-debugging.md`. Dedicated QA agent account (for Playwright specs and the `qa-playwright` sub-agent — AI agents only, never for humans): `docs/testing/qa-agent-account.md`.
 
 ## Commands
 
@@ -81,9 +81,11 @@ The core data-isolation unit is the **household** (`modules/household`). Users b
 - `common/` — shared exceptions (typed HTTP errors), base model
 - `cli.py` — Typer management CLI reusing the same async DB session
 
-Modules: `auth` (JWT access + refresh tokens), `users`, `household`, `cards` (credit cards + billing cycles), `bank_accounts`, `categories` (household + global system categories, rules), `transactions` (types: expense/income/transfer/refund; splits; change history), `plaid`.
+Modules: `auth` (JWT access + refresh tokens), `users`, `household`, `cards` (credit cards + billing cycles), `bank_accounts`, `categories` (household + global system categories, rules), `transactions` (types: expense/income/transfer/refund; splits; change history), `plaid`, `subscriptions`.
 
 **Plaid module** (`modules/plaid/`): `client.py` wraps the Plaid SDK, `crypto.py` encrypts access tokens at rest (Fernet — needs `PLAID_TOKEN_ENCRYPTION_KEY` in `.env`), `sync.py` does cursor-based incremental transaction sync, initial sync runs in-process via FastAPI `BackgroundTasks` (no worker). Sandbox login: `user_good` / `pass_good`.
+
+**Subscriptions module** (`modules/subscriptions/`, Epic F05): `detection.py` heuristically detects recurring charges (same merchant + similar amount + regular cadence) and creates `pending_review` subscription candidates for the user to confirm or dismiss. Detection re-runs automatically after each Plaid sync.
 
 **Adding a module:** create `modules/<name>/` with the five files → import models in `alembic/env.py` → register router in `api/v1/router.py` → `make migration MSG="..."` + `make migrate`.
 
@@ -91,7 +93,7 @@ All routes, sessions, and queries are async. Tests use pytest-asyncio in auto mo
 
 ### Frontend (`apps/web/src/`)
 
-- `routes/` — TanStack Router file-based routes. `secure.tsx` is the authenticated layout; app pages live under `routes/secure/` (dashboard, transactions, wallet, settings). `routeTree.gen.ts` is auto-generated — never edit.
+- `routes/` — TanStack Router file-based routes. `secure.tsx` is the authenticated layout; app pages live under `routes/secure/` (dashboard, transactions, wallet, subscriptions, settings). `routeTree.gen.ts` is auto-generated — never edit.
 - `features/<name>/` — per feature: `<name>Api.ts` (ky calls), `use<Name>.ts` (TanStack Query hooks), components
 - `components/ui/` — shadcn/ui primitives only, no business logic
 - `lib/api-client.ts` — ky instance; all API calls go through it (attaches auth, handles refresh)
@@ -113,7 +115,10 @@ Browser → TanStack Query → api-client.ts (ky) → Vite proxy
 - Secrets in `.env` (gitignored); `.env.example` checked in. Plaid needs `PLAID_SANDBOX_CLIENT_ID`/`PLAID_SANDBOX_SECRET`, `PLAID_PROD_CLIENT_ID`/`PLAID_PROD_SECRET`, and `PLAID_TOKEN_ENCRYPTION_KEY` in `apps/api/.env`. There is no `PLAID_ENV` — sandbox vs production is a per-household flag (`Household.is_plaid_sandbox`, defaults to sandbox)
 - lefthook pre-commit hooks run ruff on Python, ESLint/Prettier on TS
 - FastAPI's OpenAPI spec (`/docs`) is the API contract source of truth
+- CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck, and tests for both apps, plus `alembic check` for migration drift — model changes must ship with a migration
 
-## Sub-agents
+## Agentic workflow
 
-`.claude/agents/` defines `product-manager` (coordinates, never writes code), `api-backend` (owns `apps/api/`), `web-frontend` (owns `apps/web/`), and `qa-playwright` (browser-tests the live app at :3000). Use them when delegating feature work.
+`.claude/agents/` defines `product-manager` (coordinates, never writes code), `api-backend` (owns `apps/api/`), `web-frontend` (owns `apps/web/`), and `qa-playwright` (browser-tests the live app at :3000). Use them when delegating feature work; delegate with the agent's name as `subagent_type` so its own system prompt is loaded.
+
+This is the **only** orchestration system for this repo. The GSD framework (`/gsd:*` skills, `gsd-*` agents) is installed globally for other projects — do not initialize it here (no `.planning/` directory) or route moneywise work through its commands. Feature planning lives in `docs/product/epics/`; a feature is done when tests, typecheck, migrations, and a `qa-playwright` pass all succeed.

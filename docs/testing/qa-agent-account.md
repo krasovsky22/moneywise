@@ -51,10 +51,15 @@ make reset-data EMAIL=qa-agent@moneywise.dev YES=1
 
 To remove the account entirely (e.g. to test the seed migration itself): `uv run alembic downgrade -1` from `apps/api` will drop it (cascades to all household-scoped data), and the next `alembic upgrade head` recreates it fresh.
 
-## Known inconsistencies in existing specs (cleanup candidates)
+## Using the account from Playwright specs
 
-- `playwright-tests/transactions/transactions-page.spec.ts` uses `qa@moneywise.test` — unregistrable (reserved TLD).
-- `playwright-tests/bank-accounts/bank-accounts.spec.ts` uses `qa_moneywise@gmail.com`.
-- `playwright-tests/wallet/wallet.spec.ts` signs up a timestamped `@example.com` user per run.
+Import the shared helper instead of hardcoding credentials:
 
-These predate this account and should be migrated to the credentials above (via shared constants or Playwright `storageState`) next time they're touched.
+```ts
+import { loginAsQaAgent, resetQaData, BASE_URL } from "../helpers/qa-account";
+```
+
+- `loginAsQaAgent(page)` — log in via the UI (call in `test.beforeEach`).
+- `resetQaData()` — wipe the QA household via the management CLI (call once in `test.beforeAll` **only** when the suite asserts empty states; it deletes data other suites may have created, which is allowed by rule 3 above).
+
+The transactions, bank-accounts, and wallet suites were migrated to this helper on 2026-07-16; new suites should start from it.

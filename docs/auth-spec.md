@@ -22,8 +22,14 @@ All routes under this prefix require a valid session. Unauthenticated access red
 
 | Route | Page | Status | Notes |
 |---|---|---|---|
-| `/secure/dashboard` | Dashboard | ✅ | First page after login; placeholder for now |
-| `/secure/settings` | User Settings | ✅ | Profile display + change password |
+| `/secure/dashboard` | Dashboard | ✅ | First page after login; stat cards, cash-flow chart, recent activity |
+| `/secure/transactions` | Transactions | ✅ | List/filter/CRUD/split/bulk update |
+| `/secure/wallet` | Wallet | ✅ | Cards, bank accounts, Plaid connections |
+| `/secure/subscriptions` | Subscriptions | ✅ | Detected recurring charges |
+| `/secure/settings` | User Settings | ✅ | Profile display + change password; `/secure/settings/categories` for category management |
+| `/secure/join-household` | Join Household | ✅ | Invitation acceptance flow |
+
+(Routes beyond dashboard/settings were added by later epics; this spec covers the auth behavior that guards them, not their features.)
 
 ---
 
@@ -62,9 +68,7 @@ Behavior:
 
 ### Dashboard (`/secure/dashboard`) ✅
 
-- Placeholder page for now
-- Shows "Welcome, {email}" as a heading
-- Will host the main app features in future milestones
+- Landing page after login (originally a placeholder; now hosts stat cards, the cash-flow chart, and recent activity — see Epic 09)
 
 ### User Settings (`/secure/settings`) ✅
 

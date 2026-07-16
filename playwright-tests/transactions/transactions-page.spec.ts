@@ -1,21 +1,25 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "playwright/test";
+import { BASE_URL, loginAsQaAgent } from "../helpers/qa-account";
 
-const BASE_URL = "http://localhost:3000";
-const QA_EMAIL = "qa@moneywise.test";
-const QA_PASSWORD = "TestPass123!";
-
-// Login helper — the existing session for test+epic04@test.com is reused
-// if the app is already logged in; otherwise we use QA credentials.
-async function ensureLoggedIn(page: import("@playwright/test").Page) {
+async function ensureLoggedIn(page: Page) {
   await page.goto(`${BASE_URL}/secure/transactions`);
-  // If redirected away from /secure/* the session expired — log in
   if (!page.url().includes("/secure/")) {
-    await page.goto(`${BASE_URL}/login`);
-    await page.locator('input[type="email"]').fill(QA_EMAIL);
-    await page.locator('input[type="password"]').fill(QA_PASSWORD);
-    await page.getByRole("button", { name: "Log in" }).click();
-    await page.waitForURL(/\/secure\//);
+    await loginAsQaAgent(page);
     await page.goto(`${BASE_URL}/secure/transactions`);
+  }
+}
+
+// The shared QA household may be empty; tests that act on the first table
+// row seed a transaction when none exist.
+async function ensureRowsExist(page: Page) {
+  await expect(page.getByText(/\d+ total/)).toBeVisible();
+  if ((await page.locator("table tbody tr").count()) === 0) {
+    await page.getByRole("button", { name: /Add transaction/i }).click();
+    const dialog = page.getByRole("dialog", { name: "Add Transaction" });
+    await dialog.getByLabel("Amount *").fill("-1.00");
+    await dialog.getByLabel("Merchant *").fill("QA Seed Row");
+    await dialog.getByRole("button", { name: "Add transaction" }).click();
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
   }
 }
 
@@ -170,6 +174,7 @@ test.describe("Transactions page — Edit modal", () => {
     page,
   }) => {
     await ensureLoggedIn(page);
+    await ensureRowsExist(page);
 
     // Click first edit button in table
     const firstEditBtn = page.locator("table tbody tr:first-child button[aria-label^='Edit']");
@@ -202,6 +207,7 @@ test.describe("Transactions page — Edit modal", () => {
     page,
   }) => {
     await ensureLoggedIn(page);
+    await ensureRowsExist(page);
 
     await page.locator("table tbody tr:first-child button[aria-label^='Edit']").click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -212,6 +218,7 @@ test.describe("Transactions page — Edit modal", () => {
 
   test("Split button opens the Split Transaction modal", async ({ page }) => {
     await ensureLoggedIn(page);
+    await ensureRowsExist(page);
 
     await page.locator("table tbody tr:first-child button[aria-label^='Edit']").click();
     const editDialog = page.getByRole("dialog");
@@ -295,13 +302,24 @@ test.describe("Transactions page — Filter bar", () => {
   test("search filter narrows the table results", async ({ page }) => {
     await ensureLoggedIn(page);
 
+    // Seed a matching transaction if the QA household doesn't have one
+    await expect(page.getByText(/\d+ total/)).toBeVisible();
+    if ((await page.getByRole("cell", { name: /Whole Foods/ }).count()) === 0) {
+      await page.getByRole("button", { name: /Add transaction/i }).click();
+      const dialog = page.getByRole("dialog", { name: "Add Transaction" });
+      await dialog.getByLabel("Amount *").fill("-42.17");
+      await dialog.getByLabel("Merchant *").fill("Whole Foods");
+      await dialog.getByRole("button", { name: "Add transaction" }).click();
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    }
+
     // Type in search box
     await page.getByPlaceholder("Search transactions…").fill("Whole Foods");
     await page.waitForTimeout(500); // debounce
 
     // Should show fewer/filtered results
     await expect(page.getByText(/1 total|Search: Whole Foods/i)).toBeVisible({ timeout: 3000 });
-    await expect(page.getByRole("cell", { name: /Whole Foods/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: /Whole Foods/ }).first()).toBeVisible();
   });
 
   test("Clear all button resets filters", async ({ page }) => {
@@ -356,6 +374,7 @@ test.describe("Transactions page — Inline category picker", () => {
     page,
   }) => {
     await ensureLoggedIn(page);
+    await ensureRowsExist(page);
 
     // Click the inline category combobox in first row
     const firstCategoryCombo = page.locator("table tbody tr:first-child [role='combobox'][aria-label='Select category']");
@@ -375,6 +394,7 @@ test.describe("Transactions page — JS errors", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await ensureLoggedIn(page);
+    await ensureRowsExist(page);
 
     // Open and close Add modal
     await page.getByRole("button", { name: /Add transaction/i }).click();

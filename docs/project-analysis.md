@@ -2,6 +2,8 @@
 
 > Date: 2026-07-02
 > Scope: full-codebase review of implemented features, technical debt, and recommended next steps.
+>
+> **Status update (2026-07-16):** all §2 refactor items shipped (verified: `/transactions/summary` exists, dead statement-pipeline code and deps removed). Of the §3 recommendations, **#6 subscription detection (F05) is now implemented** (`modules/subscriptions/`, re-runs after each Plaid sync). #1 cashflow (Epic 08), #2 webhooks/scheduled sync, #3 recurring income, #4 reminders, #5 review queue, and #7 export report remain open. Treat §1's feature inventory as a historical snapshot.
 
 ---
 
